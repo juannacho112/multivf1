@@ -1,23 +1,26 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, TouchableOpacity, Animated, Easing, Image } from 'react-native';
+import { StyleSheet, View, TouchableOpacity, Animated, Easing } from 'react-native';
 import { Card } from '../../models/Card';
 import { ThemedText } from '../ThemedText';
 import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme } from 'react-native';
 import { Colors } from '../../constants/Colors';
+import { CardDesign } from './CardDesign';
 
 interface FlippableCardProps {
   card: Card | null;
   faceDown?: boolean;
   manualFlip?: boolean;
   flipToFront?: boolean;
+  useEnhancedDesign?: boolean;
 }
 
-export const FlippableCard: React.FC<FlippableCardProps> = ({ 
+export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({ 
   card, 
   faceDown = false,
   manualFlip = false,
-  flipToFront = false
+  flipToFront = false,
+  useEnhancedDesign = true
 }) => {
   const colorScheme = useColorScheme() || 'light';
   const colors = Colors[colorScheme];
@@ -85,6 +88,15 @@ export const FlippableCard: React.FC<FlippableCardProps> = ({
   });
 
   const renderCardFront = () => {
+    if (useEnhancedDesign) {
+      return (
+        <Animated.View style={[styles.cardSide, { opacity: cardFrontOpacity }]}>
+          <CardDesign card={card} />
+        </Animated.View>
+      );
+    }
+
+    // Fallback to original card design if needed
     if (!card) {
       return (
         <View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint, opacity: cardFrontOpacity }]}>
@@ -103,11 +115,7 @@ export const FlippableCard: React.FC<FlippableCardProps> = ({
         </View>
 
         {card.imageUrl && (
-          <Image
-            source={{ uri: typeof card.imageUrl === 'string' ? card.imageUrl : String(card.imageUrl) }}
-            style={styles.cardImage}
-            resizeMode="contain"
-          />
+          <View style={styles.cardImage} />
         )}
 
         <View style={styles.cardBody}>
@@ -195,6 +203,23 @@ export const FlippableCard: React.FC<FlippableCardProps> = ({
     </TouchableOpacity>
   );
 };
+
+// Basic styles for holographic effects
+const holographicStyles = StyleSheet.create({
+  container: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  holographicOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.3,
+    backgroundColor: 'transparent',
+  },
+});
 
 const styles = StyleSheet.create({
   cardContainer: {

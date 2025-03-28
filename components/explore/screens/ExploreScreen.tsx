@@ -93,7 +93,7 @@ export const ExploreScreen: React.FC<Props> = ({ navigation }) => {
             <MapRenderer 
               mapPath="json_tiled_Map_uploads/officemain.tmj"
               tilesetPaths={{
-                Floors_only_32x32: require('/home/user/sample-ai-app-1/json_tiled_Map_uploads/Assets/Modern_Office_Revamped_v1.2/Floors_only_32x32.png')
+                Floors_only_32x32: require('/home/office/Desktop/VsCode-Project1/GitClones/TestRepoApp/json_tiled_Map_uploads/Assets/Modern_Office_Revamped_v1.2/Floors_only_32x32.png')
               }}
             />
             

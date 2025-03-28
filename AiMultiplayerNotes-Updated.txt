@@ -1,0 +1,69 @@
+# Updated Online Multiplayer Implementation Notes
+
+## Overview
+This document outlines issues found in the current multiplayer implementation and provides solutions to integrate the VeeFriends card game rules from single-player mode into multiplayer.
+
+## Current Issues Identified
+
+1. **Incorrect Game Logic**: The backend has two conflicting card game implementations:
+   - Generic card game in `socketService.js`
+   - VeeFriends-specific game in `veefriendsSocketService.js`, which isn't fully aligned with single-player VeeFriends logic
+
+2. **MongoDB Connection Issues**: Potential connection issues to the MongoDB database
+
+3. **Frontend/Backend Alignment**: The frontend components need proper alignment with the VeeFriends multiplayer implementation 
+
+4. **Auth Issues**: Guest login functionality needs improvement and authentication flow needs to be fixed
+
+5. **Navigation Flow**: The multiplayer flow needs streamlining to go directly from main menu to authentication
+
+## Implementation Plan
+
+### 1. Update Backend to Use VeeFriends Game Logic
+
+- Keep the VeefriendsGame.js model and veefriendsSocketService.js
+- Delete or rename the generic card game files that are no longer needed
+- Ensure correct imports of card data from cardUtils.js
+- Align server-side game logic with single-player rules (skill, stamina, aura attributes)
+
+### 2. Fix MongoDB Connection
+
+- Ensure MongoDB is running and accessible
+- Update connection string to use proper authentication if needed
+- Add better error handling for database connections
+- Create default admin user if needed
+
+### 3. Update Frontend Components
+
+- Align MultiplayerContext.tsx with VeeFriends game state properties
+- Update OnlineBattleScreen.tsx to properly show VeeFriends game elements
+- Ensure proper user flow from main menu → auth → lobby → game
+
+### 4. Improve Authentication
+
+- Ensure guest login works correctly without database entries
+- Add automatic token handling for reconnection
+- Provide clearer error messages for auth issues
+
+### 5. Clean Up Navigation
+
+- Simplify the navigation flow between screens
+- Update the "Battle Online" option to go directly to auth screen
+- Ensure proper state handling between transitions
+
+## Guest Access Implementation
+
+The guest access functionality allows players to quickly join games without registration:
+
+1. Front-end implements "Join as Guest" button that connects to socket server with isGuest flag
+2. Backend creates a temporary guest user identifier with randomly generated username
+3. Guest users bypass MongoDB authentication but participate fully in games
+4. Guest data is only stored for the current session
+
+## Game Flow
+
+1. Main Menu → "Battle Online" button
+2. Authentication screen with login/register/guest options
+3. Lobby screen for creating/joining games or matchmaking
+4. Waiting room to prepare for match
+5. Battle screen using VeeFriends game rules with skill, stamina, aura attributes

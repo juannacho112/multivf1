@@ -168,14 +168,15 @@ export const createGameScreenStyles = (colors: any) => StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     marginVertical: 16,
+    paddingHorizontal: 30, // Added padding to ensure cards don't get cut off
   },
   cardArea: {
-    width: 160,
-    height: 230,
+    width: 220, // Increased to match FlippableCard width
+    height: 300, // Increased to match FlippableCard height
   },
   smallCardArea: {
-    width: 120,
-    height: 180,
+    width: 180, // Increased to accommodate card with margins
+    height: 240, // Adjusted for proper aspect ratio
   },
   
   // Game info

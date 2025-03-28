@@ -1,0 +1,32 @@
+# npm audit report
+
+@babel/helpers  <7.26.10
+Severity: moderate
+Babel has inefficient RexExp complexity in generated code with .replace when transpiling named capturing groups - https://github.com/advisories/GHSA-968p-4wvh-cqc8
+fix available via `npm audit fix`
+node_modules/@babel/helpers
+
+@babel/runtime  <7.26.10
+Severity: moderate
+Babel has inefficient RexExp complexity in generated code with .replace when transpiling named capturing groups - https://github.com/advisories/GHSA-968p-4wvh-cqc8
+fix available via `npm audit fix`
+node_modules/@babel/runtime
+
+cookie  <0.7.0
+cookie accepts cookie name, path, and domain with out of bounds characters - https://github.com/advisories/GHSA-pxg6-pf52-xh8x
+fix available via `npm audit fix`
+node_modules/cookie
+  @remix-run/server-runtime  *
+  Depends on vulnerable versions of cookie
+  node_modules/@remix-run/server-runtime
+    @remix-run/node  *
+    Depends on vulnerable versions of @remix-run/server-runtime
+    node_modules/@remix-run/node
+      @expo/server  <=0.5.1
+      Depends on vulnerable versions of @remix-run/node
+      node_modules/@expo/server
+
+6 vulnerabilities (4 low, 2 moderate)
+
+To address all issues, run:
+  npm audit fix

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Dimensions } from 'react-native';
 import { FlippableCard } from './FlippableCard';
+import { EnhancedFlippableCard } from './EnhancedFlippableCard';
 import { VictoryScreen } from './VictoryScreen';
 import { RoundResultScreen } from './RoundResultScreen';
 import { GameHeader } from './GameHeader';
@@ -237,7 +238,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ onExit, onReset }) => {
   };
 
   return (
-    <View style={[styles.container, {backgroundColor: colors.background}]}>
+    <View style={[
+      styles.container, 
+      {
+        backgroundColor: colors.background,
+        paddingHorizontal: 20, // Add extra horizontal padding
+      }
+    ]}>
       {/* Victory screen overlay */}
       {showVictory && (
         <VictoryScreen 
@@ -298,11 +305,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ onExit, onReset }) => {
         <View style={styles.cardsSection}>
           {/* AI Player Card - Only visible when being resolved */}
           <View style={[styles.cardArea, isSmallScreen && styles.smallCardArea]}>
-            <FlippableCard
+            <EnhancedFlippableCard
               card={state.cardsInPlay.player2}
               faceDown={state.phase !== 'resolve'}
               flipToFront={state.phase === 'resolve'}
               manualFlip={false}
+              useEnhancedDesign={true}
             />
           </View>
           
@@ -316,10 +324,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ onExit, onReset }) => {
           
           {/* Player Card - Always visible */}
           <View style={[styles.cardArea, isSmallScreen && styles.smallCardArea]}>
-            <FlippableCard
+            <EnhancedFlippableCard
               card={state.cardsInPlay.player1}
               faceDown={false}
               manualFlip={false}
+              useEnhancedDesign={true}
             />
           </View>
         </View>

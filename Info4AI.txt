@@ -1,0 +1,33 @@
+Project Structure Information:
+
+1. Battle System Components:
+- Main battle screen: /components/battle/screens/BattleScreen.tsx
+- Card component: /components/battle/components/CardComponent.tsx
+- Battle context: /components/battle/contexts/BattleContext.tsx
+- Card data and models: /components/battle/data/cardData.ts and /components/battle/models/Card.ts
+
+2. Card Positioning:
+- Cards are rendered in a horizontal ScrollView with flexDirection: 'row'
+- Field cards use the fieldContainer style for positioning
+- Card dimensions are responsive, calculated based on screen width:
+  * Small: 25% of screen width
+  * Medium: 35% of screen width
+  * Large: 45% of screen width
+  * Height is 1.4x the width (standard card aspect ratio)
+
+3. Changes Made:
+- Modified fieldContainer style in BattleScreen.tsx to better center cards:
+  * Added justifyContent: 'center' for horizontal centering
+  * Added alignItems: 'center' for vertical centering
+
+4. Key UI Components:
+- BattleScreen renders:
+  * Opponent's hand (face down)
+  * Game info (energy, deck counts)
+  * Opponent's field
+  * Game log
+  * Player's field
+  * Action buttons
+  * Player's hand
+
+This information will be helpful for future UI adjustments and understanding the battle system's structure.

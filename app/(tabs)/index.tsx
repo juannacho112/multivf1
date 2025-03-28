@@ -17,7 +17,7 @@ import { Card } from '../../models/Card';
 import { DeckNavigationProvider } from '../../contexts/NavigationContext';
 
 // Game modes
-type GameMode = 'menu' | 'deckBuildingP1' | 'deckBuildingP2' | 'battle' | 'explore' | 'game' | 'myDecks' | 'deckEditor';
+type GameMode = 'menu' | 'deckBuildingP1' | 'deckBuildingP2' | 'battle' | 'game' | 'myDecks' | 'deckEditor';
 type PlayerType = 'human' | 'ai';
 
 export default function HomeScreen() {
@@ -81,10 +81,7 @@ export default function HomeScreen() {
     setGameMode('deckBuildingP1');
   };
 
-  // Handle exploration mode
-  const handleExplore = () => {
-    setGameMode('explore');
-  };
+  // Exploration mode removed as requested
 
   // Navigation methods for deck management
   const navigateToDeckEditor = (deckId: string) => {
@@ -145,8 +142,14 @@ const goBack = () => {
             onExit={handleBattleExit}
           />
         );
-      case 'explore':
-        return <MainGame onExit={handleBattleExit} />;
+      case 'game':
+        return (
+          <MainGame
+            initialMode="multiplayer"
+            onExit={goBackToMenu}
+          />
+        );
+      // Explore case removed as requested
       case 'myDecks':
         return (
           <DeckNavigationProvider value={navigationContextValue}>
@@ -182,18 +185,12 @@ const goBack = () => {
             resizeMode="contain"
           />
           <ThemedText type="subtitle" style={styles.title}>
-            Card Battle Explorer
+            Card Battle Game
           </ThemedText>
         </View>
         
         <View style={styles.menuContainer}>
-          <TouchableOpacity 
-            style={[styles.menuButton, styles.exploreButton]} 
-            onPress={handleExplore}
-          >
-            <Ionicons name="map-outline" size={24} color={isDark ? "#FFF" : "#333"} />
-            <ThemedText style={styles.buttonText}>Explore Mode</ThemedText>
-          </TouchableOpacity>
+          {/* Explore button removed as requested */}
 
           <TouchableOpacity 
             style={[styles.menuButton, styles.singlePlayerButton]} 
@@ -205,10 +202,14 @@ const goBack = () => {
 
           <TouchableOpacity 
             style={[styles.menuButton, styles.multiplayerButton]} 
-            onPress={handleMultiplayer}
+            onPress={() => {
+              console.log("Navigating directly to multiplayer");
+              // Direct path to multiplayer mode, skipping any intermediate screens
+              setGameMode('game');
+            }}
           >
-            <Ionicons name="people-outline" size={24} color={isDark ? "#FFF" : "#333"} />
-            <ThemedText style={styles.buttonText}>Local Multiplayer</ThemedText>
+            <Ionicons name="globe-outline" size={24} color={isDark ? "#FFF" : "#333"} />
+            <ThemedText style={styles.buttonText}>Battle Online</ThemedText>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -279,9 +280,7 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  exploreButton: {
-    backgroundColor: '#FF9800',
-  },
+  // exploreButton style removed
   singlePlayerButton: {
     backgroundColor: '#4CAF50',
   },

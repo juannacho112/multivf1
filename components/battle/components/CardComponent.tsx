@@ -37,7 +37,7 @@ export const CardComponent: React.FC<CardComponentProps> = ({
   const [isPressed, setIsPressed] = useState(false);
   
   // Calculate card dimensions based on size
-  const cardWidth = size === 'small' ? width * 0.25 : size === 'medium' ? width * 0.35 : width * 0.45;
+  const cardWidth = size === 'small' ? width * 0.2 : size === 'medium' ? width * 0.25 : width * 0.35;
   const cardHeight = cardWidth * 1.4; // Standard card aspect ratio
   
   // Get color based on card type

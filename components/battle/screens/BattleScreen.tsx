@@ -535,10 +535,16 @@ const styles = StyleSheet.create({
   },
   fieldContainer: {
     flexDirection: 'row',
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 60, // Increased horizontal padding to ensure edge visibility
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    flexGrow: 1, // Allow container to grow
   },
   fieldCardContainer: {
-    marginHorizontal: 5,
+    marginHorizontal: 10, // Maintain spacing between cards
+    paddingHorizontal: 10, // Increased padding to prevent edge clipping
   },
   fieldCard: {
     marginBottom: 5,

@@ -1,0 +1,121 @@
+# Online Multiplayer Implementation Notes
+
+## Overview
+This document describes the implementation of online multiplayer functionality for the Veefriends card game. The implementation includes a complete client-server architecture with real-time gameplay using WebSockets.
+
+## Architecture
+The multiplayer system consists of two main components:
+
+1. **Backend Server**: An Express.js server with Socket.io for real-time communication and MongoDB for data persistence.
+2. **Frontend Client**: React Native components integrated with the existing game that handle authentication, matchmaking, and real-time gameplay.
+
+## Veefriends Card Game Logic
+- The multiplayer system uses the same card game logic as the single player version:
+  - Cards have three main attributes: Skill, Stamina, and Aura
+  - Players take turns challenging each other with selected attributes
+  - The opponent can accept or deny the challenge
+  - If all attributes are denied, the "total" attribute is used
+  - Points are awarded in the challenged attribute
+  - First player to reach 7 points in any attribute wins
+
+## Setup Instructions
+
+### Backend Setup
+1. Navigate to the `backend` directory:
+   ```
+   cd backend
+   ```
+
+2. Install dependencies if not already installed:
+   ```
+   npm install
+   ```
+
+3. Set up environment variables in `.env`:
+   ```
+   PORT=3000
+   MONGODB_URI=mongodb://localhost:27017/tcg-game
+   JWT_SECRET=your_jwt_secret_key
+   ```
+
+4. Start MongoDB:
+   ```
+   # If using local MongoDB
+   mongod --dbpath /path/to/data/directory
+   ```
+
+5. Start the server:
+   ```
+   npm run dev
+   ```
+
+### Frontend Configuration
+1. Update the server URL in `components/multiplayer/services/SocketService.ts` with your development machine's local IP address:
+   ```typescript
+   const SERVER_URL = 'http://YOUR_LOCAL_IP:3000';
+   ```
+
+2. Make sure all required dependencies are installed:
+   ```
+   npm install @socket.io/client socket.io-client @react-native-async-storage/async-storage
+   ```
+
+## Authentication Flow
+1. Users can either:
+   - Register or login through the AuthScreen
+   - Join as a guest without authentication
+2. For registered users, a JWT token is stored in AsyncStorage
+3. This token is used for all subsequent API requests and WebSocket connections
+4. The socket connection is authenticated using the JWT token or guest flag
+
+## Guest Access
+- Players can access the game without registration using the "Join as Guest" option
+- Guests receive a randomly generated username (e.g., "Guest_1234")
+- Guest users bypass the MongoDB authentication but still participate fully in games
+- Guest data is stored only for the current session and is not persistent across sessions
+
+## Multiplayer Flow
+1. User launches the game and selects "Battle Online" from the main menu
+2. User is taken directly to the authentication screen where they can:
+   - Register or login via AuthScreen
+   - Join as a guest
+3. After authentication, user is taken to the MultiplayerLobbyScreen
+4. User can choose to:
+   - Join matchmaking to find random opponents
+   - Create a new game (private or public)
+   - Join a friend's game using a game code
+5. When matched or joined, user enters the GameWaitingRoom
+6. Both players mark themselves as ready
+7. Game begins in OnlineBattleScreen when both players are ready
+
+## Game State Synchronization
+- Game state is stored on the server and synchronized to clients
+- All game actions are sent to the server, validated, and broadcast to players
+- Server acts as the source of truth to prevent cheating
+- Reconnection handling allows players to rejoin games after connection issues
+
+## Recent Fixes and Updates
+1. Fixed guest authentication to properly handle user sessions without requiring MongoDB user records
+2. Modified the main menu flow to skip the game selection screen and go directly to authentication
+3. Updated handling of player disconnections to properly manage both regular users and guest accounts
+4. Improved error handling in the socket services for more robust operation
+
+## Testing Notes
+- For local testing, run both the backend server and frontend app
+- Use the "Join as Guest" option for quick testing without accounts
+- To test with two players: 
+  1. Connect from two different devices to the same backend server
+  2. Or use a physical device + emulator
+
+## Current Limitations
+- Limited persistent user statistics between sessions (especially for guest users)
+- Basic matchmaking without skill-based pairing
+- Limited error recovery for extended disconnections
+
+## Future Improvements
+- Enhanced deck building integration
+- Tournament mode
+- Spectator functionality
+- Friend system with invites
+- Chat functionality
+- Skill-based matchmaking

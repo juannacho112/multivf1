@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card, ChallengeAttribute } from '../../models/Card';
 import { Colors } from '../../constants/Colors';
 import { useColorScheme } from 'react-native';
+import { CardDesign } from './CardDesign';
 
 interface RoundResultScreenProps {
   playerCard: Card | null;
@@ -111,11 +112,10 @@ export const RoundResultScreen: React.FC<RoundResultScreenProps> = ({
             </ThemedText>
           </View>
           
-          <View style={styles.comparisonContainer}>
-            <View style={[
-              styles.playerColumn, 
-              winner === 'player1' && { backgroundColor: 'rgba(76, 175, 80, 0.1)' }
-            ]}>
+          {/* Card comparison */}
+          <View style={styles.cardsContainer}>
+            <View style={styles.cardWrapper}>
+              <CardDesign card={playerCard} style={styles.resultCard} />
               <ThemedText style={styles.playerName}>{playerName}</ThemedText>
               <ThemedText 
                 style={[
@@ -140,10 +140,8 @@ export const RoundResultScreen: React.FC<RoundResultScreenProps> = ({
               </View>
             )}
             
-            <View style={[
-              styles.playerColumn, 
-              winner === 'player2' && { backgroundColor: 'rgba(244, 67, 54, 0.1)' }
-            ]}>
+            <View style={styles.cardWrapper}>
+              <CardDesign card={opponentCard} style={styles.resultCard} />
               <ThemedText style={styles.playerName}>{opponentName}</ThemedText>
               <ThemedText 
                 style={[
@@ -192,6 +190,22 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+  },
+  cardsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  cardWrapper: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  resultCard: {
+    width: 130,
+    height: 180,
+    marginBottom: 8,
+    transform: [{ scale: 0.8 }],
   },
   modal: {
     width: '90%',
