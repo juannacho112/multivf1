@@ -22,26 +22,26 @@ const setupVeefriendsSocketIO = (io) => {
     console.log(`Socket ${socket.id} upgraded transport to: ${socket.protocol}`);
   });
   
-  // Authorization middleware for Socket.IO
+  // Improved authorization middleware for Socket.IO
   io.use(async (socket, next) => {
-    console.log(`Auth check for socket ${socket.id}, transport: ${socket.conn.transport.name}`);
+    const transportType = socket.conn?.transport?.name || 'unknown';
+    console.log(`Auth check for socket ${socket.id}, transport: ${transportType}`);
     
     try {
-      const token = socket.handshake.auth.token;
-      
-      // Allow guest connections without a token
-      const isGuest = socket.handshake.auth.isGuest === true;
+      // Check for guest login first
+      const isGuest = socket.handshake.auth?.isGuest === true;
       
       if (isGuest) {
-        // Generate random guest username
+        // Generate random guest username with better uniqueness
         const guestId = uuidv4();
         const guestNumber = Math.floor(1000 + Math.random() * 9000);
         const username = `Guest_${guestNumber}`;
         
-        // Store guest info
+        // Store guest info with timestamp for potential cleanup later
         guestUsers.set(guestId, {
           username,
-          displayName: username
+          displayName: username,
+          createdAt: new Date()
         });
         
         // Attach guest data to socket
@@ -52,21 +52,40 @@ const setupVeefriendsSocketIO = (io) => {
           isGuest: true
         };
         
-        console.log(`Guest login successful: ${username} (${guestId}) using ${socket.conn.transport.name}`);
+        console.log(`Guest login successful: ${username} (${guestId}) using ${transportType}`);
         return next();
       }
+      
+      // If not guest, check for token
+      const token = socket.handshake.auth?.token;
       
       if (!token) {
         console.log('Auth failed: No token provided');
         return next(new Error('Authentication error: Token not provided'));
       }
       
+      // Validate token
       try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret_for_dev');
+        // Get JWT secret from environment with proper fallback
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+          console.error('JWT_SECRET not defined in environment');
+          return next(new Error('Server configuration error'));
+        }
+        
+        // Verify token with proper error handling
+        const decoded = jwt.verify(token, jwtSecret);
+        
+        if (!decoded || !decoded.userId) {
+          console.log('Auth failed: Invalid token payload');
+          return next(new Error('Authentication error: Invalid token format'));
+        }
+        
+        // Find the user in database
         const user = await User.findById(decoded.userId);
         
         if (!user) {
-          console.log(`Auth failed: User ${decoded.userId} not found`);
+          console.log(`Auth failed: User ${decoded.userId} not found in database`);
           return next(new Error('Authentication error: User not found'));
         }
         
@@ -81,8 +100,17 @@ const setupVeefriendsSocketIO = (io) => {
         console.log(`Auth successful for user: ${user.username}`);
         next();
       } catch (error) {
-        console.log(`Auth error: ${error.message}`);
-        return next(new Error('Authentication error: Invalid token'));
+        // Handle specific JWT errors
+        if (error.name === 'TokenExpiredError') {
+          console.log(`Auth failed: Token expired for socket ${socket.id}`);
+          return next(new Error('Authentication error: Token expired'));
+        } else if (error.name === 'JsonWebTokenError') {
+          console.log(`Auth failed: Invalid token for socket ${socket.id}: ${error.message}`);
+          return next(new Error('Authentication error: Invalid token'));
+        } else {
+          console.log(`Auth error: ${error.message}`);
+          return next(new Error(`Authentication error: ${error.message}`));
+        }
       }
     } catch (error) {
       console.log(`Unexpected auth error: ${error.message}`);

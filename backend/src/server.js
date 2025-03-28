@@ -37,39 +37,25 @@ const allowedOrigins = [
   'https://localhost:*'
 ];
 
-// Setup Socket.IO with CORS and better connection settings
+// Setup Socket.IO with simplified CORS and better connection settings
 const io = new Server(server, {
   cors: {
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps)
       if (!origin) return callback(null, true);
       
-      // Check if origin is allowed
-      if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.some(pattern => {
-        return origin.match(new RegExp(pattern.replace('*', '.*')));
-      })) {
-        callback(null, true);
-      } else {
-        console.log(`CORS blocked origin: ${origin}`);
-        // Still allow for debugging purposes in development
-        if (process.env.NODE_ENV !== 'production') {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
-      }
+      // Always allow for better compatibility
+      callback(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ["my-custom-header", "Content-Type", "Authorization", "Access-Control-Allow-Origin"],
-    exposedHeaders: ["Content-Length", "X-Requested-With"],
   },
-  // Extremely permissive settings for troubleshooting
-  pingTimeout: 300000, // 5 minute timeout
-  pingInterval: 5000, // 5 second ping
-  connectTimeout: 120000, // 2 minute connect timeout
-  // Use only polling (most compatible)
-  transports: ['polling'],
+  // More reasonable connection settings
+  pingTimeout: 60000, // 1 minute timeout
+  pingInterval: 25000, // 25 second ping
+  connectTimeout: 60000, // 1 minute connect timeout
+  // Allow both polling and websockets for better compatibility
+  transports: ['polling', 'websocket'],
   // Better error handling and logging
   allowEIO3: true, // Support both Socket.IO v2 and v3 clients
   maxHttpBufferSize: 1e6, // 1MB buffer
@@ -81,11 +67,11 @@ const io = new Server(server, {
 
 // Log socket server configuration with more details
 console.log('Socket.IO server configured with:', {
-  transports: ['polling'],
-  pingTimeout: '300000ms',
-  pingInterval: '5000ms',
-  connectTimeout: '120000ms',
-  cors: 'dynamic validation with allowed origins'
+  transports: ['polling', 'websocket'],
+  pingTimeout: '60000ms',
+  pingInterval: '25000ms',
+  connectTimeout: '60000ms',
+  cors: 'simplified validation for all origins'
 });
 
 // Add a route specifically for socket.io connection testing
@@ -166,14 +152,15 @@ app.get('/info', (req, res) => {
   });
 });
 
-// Handle Socket.IO connections
-// NOTE: We're primarily using veefriendsSocketService.js as our main game service
-// The legacy socketService is kept for reference but will be deprecated
+// Handle Socket.IO connections with VeeFriends game socket service
 import setupVeefriendsSocketIO from './services/veefriendsSocketService.js';
 
-// Set up Veefriends game socket service
+// Set up Veefriends game socket service - this is our only socket service
 console.log('Setting up VeeFriends game socket service...');
 setupVeefriendsSocketIO(io);
+
+// Log that we're not using legacy socketService.js
+console.log('Note: The legacy socketService.js is deprecated and not in use');
 
 // Connect to MongoDB
 import connectDB from './config/dbConfig.js';

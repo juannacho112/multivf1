@@ -1,64 +1,126 @@
 import { io, Socket } from 'socket.io-client';
+// @ts-ignore - Handle missing type declarations
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// @ts-ignore - Handle missing type declarations
 import { EventEmitter } from 'events';
+// @ts-ignore - Handle missing type declarations
 import { Platform } from 'react-native';
 
-// Server URL - Using IP address instead of localhost for cross-device testing
-// Trying multiple connection URLs to improve connection reliability
-// The first one that works will be used
-const SERVER_URLS = [
-  'https://vf.studioboost.pro', // Production server URL with HTTPS
-  'https://vf.studioboost.pro:3000', // Production server with explicit port
-  'http://vf.studioboost.pro', // Production server with HTTP fallback
-  '//', // Same-origin relative URL - this often works best when frontend and backend are on same domain
-  'http://localhost:3000', // Works with web browser on same machine
-  'http://127.0.0.1:3000', // Alternative localhost
+// Production URL - Server should be running at this domain
+const PRODUCTION_URL = 'https://vf.studioboost.pro'; 
+
+// Fallback development URLs in priority order
+const DEV_URLS = [
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
   'http://10.0.2.2:3000', // Android emulator special case for localhost
 ];
 
-// Force production URL when in production
-if (process.env.NODE_ENV === 'production') {
-  // In production, prioritize same-origin connections
-  SERVER_URLS.unshift('//');
+// Default to production URL
+let DEFAULT_SERVER_URL = PRODUCTION_URL;
+
+// For simplicity, assume production by default
+// This can be overridden during connection attempts if needed
+const IS_DEV = false;
+
+// In development mode, use development URLs
+if (IS_DEV && Platform.OS) {
+  DEFAULT_SERVER_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 }
 
-// Platform-specific default server URL
-let SERVER_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+// Creating our own simple event emitter to avoid TS issues
+class SimpleEventEmitter {
+  private listeners: Map<string, Array<(...args: any[]) => void>> = new Map();
 
-// Attempt to retrieve last successful server URL from storage
-const getLastSuccessfulURL = async (): Promise<string | null> => {
-  try {
-    return await AsyncStorage.getItem('lastSuccessfulServerURL');
-  } catch {
-    return null;
+  public emit(event: string, ...args: any[]): boolean {
+    const eventListeners = this.listeners.get(event);
+    if (!eventListeners || eventListeners.length === 0) return false;
+    
+    eventListeners.forEach(listener => {
+      try {
+        listener(...args);
+      } catch (err) {
+        console.error(`Error in ${event} event listener:`, err);
+      }
+    });
+    return true;
   }
-};
 
-// Save last successful server URL to storage
-const saveLastSuccessfulURL = async (url: string): Promise<void> => {
-  try {
-    await AsyncStorage.setItem('lastSuccessfulServerURL', url);
-  } catch {
-    // Ignore errors storing the URL
+  public on(event: string, listener: (...args: any[]) => void): this {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, []);
+    }
+    this.listeners.get(event)!.push(listener);
+    return this;
   }
-};
 
-// Try to load the last successful URL on import
-getLastSuccessfulURL().then(url => {
-  if (url) SERVER_URL = url;
-});
+  public once(event: string, listener: (...args: any[]) => void): this {
+    const onceWrapper = (...args: any[]) => {
+      this.off(event, onceWrapper);
+      listener(...args);
+    };
+    return this.on(event, onceWrapper);
+  }
 
-class SocketService extends EventEmitter {
+  public off(event: string, listener: (...args: any[]) => void): this {
+    if (!this.listeners.has(event)) return this;
+    
+    const eventListeners = this.listeners.get(event)!;
+    const index = eventListeners.indexOf(listener);
+    
+    if (index !== -1) {
+      eventListeners.splice(index, 1);
+    }
+    return this;
+  }
+
+  public setMaxListeners(n: number): this {
+    // This is a no-op for our simple implementation
+    return this;
+  }
+}
+
+class SocketService extends SimpleEventEmitter {
   private socket: Socket | null = null;
   private isConnected: boolean = false;
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
-  private reconnectDelay: number = 2000; // ms
+  private serverUrl: string = DEFAULT_SERVER_URL;
   
   constructor() {
     super();
-    // Increase event listener limit to avoid memory leak warnings
+    // No need for setMaxListeners with our custom event emitter
     this.setMaxListeners(20);
+    
+    // Try to load previously successful URL
+    this.loadSavedServerUrl();
+  }
+  
+  /**
+   * Load any previously saved server URL from storage
+   */
+  private async loadSavedServerUrl(): Promise<void> {
+    try {
+      const savedUrl = await AsyncStorage.getItem('lastSuccessfulServerURL');
+      if (savedUrl) {
+        console.log(`Loaded saved server URL: ${savedUrl}`);
+        this.serverUrl = savedUrl;
+      }
+    } catch (error) {
+      console.warn('Failed to load saved server URL:', error);
+    }
+  }
+  
+  /**
+   * Save successful server URL to storage
+   */
+  private async saveServerUrl(url: string): Promise<void> {
+    try {
+      await AsyncStorage.setItem('lastSuccessfulServerURL', url);
+      console.log(`Saved successful server URL: ${url}`);
+    } catch (error) {
+      console.warn('Failed to save server URL:', error);
+    }
   }
   
   /**
@@ -94,20 +156,24 @@ class SocketService extends EventEmitter {
         auth = { token };
       }
       
-      // Try each server URL until one works
-      for (const url of SERVER_URLS) {
-        console.log(`Attempting to connect to server: ${url} as ${asGuest ? 'guest' : 'authenticated user'}`);
-        
-        try {
-          const connected = await this.tryConnect(url, auth);
-          if (connected) {
-            SERVER_URL = url; // Save the working URL for future use
-            console.log(`Successfully connected to ${url}`);
+      // Try to connect with current URL first
+      console.log(`Attempting to connect to primary server: ${this.serverUrl}`);
+      const connected = await this.initializeSocket(this.serverUrl, auth);
+      
+      if (connected) {
+        return true;
+      }
+      
+      // If production URL failed and we're in development, try fallback URLs
+      if (IS_DEV && this.serverUrl === PRODUCTION_URL) {
+        for (const url of DEV_URLS) {
+          console.log(`Attempting to connect to fallback server: ${url}`);
+          const fallbackConnected = await this.initializeSocket(url, auth);
+          if (fallbackConnected) {
+            this.serverUrl = url;
+            await this.saveServerUrl(url);
             return true;
           }
-        } catch (error) {
-          console.error(`Failed to connect to ${url}:`, error);
-          // Continue to the next URL
         }
       }
       
@@ -120,61 +186,70 @@ class SocketService extends EventEmitter {
   }
   
   /**
-   * Try to connect to a specific server URL
-   * @param serverUrl The server URL to try
-   * @param auth The authentication object
-   * @returns Promise that resolves to true if connected successfully, false otherwise
+   * Initialize the socket with the given URL and auth data
    */
-  private async tryConnect(serverUrl: string, auth: any): Promise<boolean> {
+  private async initializeSocket(serverUrl: string, auth: any): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
-      console.log(`Attempting to connect to ${serverUrl} with auth:`, 
-        auth.isGuest ? 'Guest auth' : 'Token auth');
+      console.log(`Connecting to ${serverUrl} with ${auth.isGuest ? 'guest' : 'token'} auth`);
       
-      // Initialize socket with auth data - match backend settings
+      // Initialize socket with improved settings that match the backend
       this.socket = io(serverUrl, {
         auth,
         reconnection: true,
-        reconnectionAttempts: Infinity, // Unlimited reconnection attempts
-        reconnectionDelay: 1000, // Start with a 1-second delay
-        reconnectionDelayMax: 10000, // Max 10 seconds between attempts
-        timeout: 60000, // Match backend timeout (60 seconds)
-        transports: ['polling'], // Use only polling initially for maximum compatibility
-        forceNew: true, // Force new connection
-        path: '/socket.io/', // Explicitly set path to match backend
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        timeout: 20000,
+        // Use both polling and websocket transport for better compatibility
+        transports: ['polling', 'websocket'],
+        upgrade: true,
+        path: '/socket.io/',
       });
       
-      console.log('Socket configured with polling-only transport for better compatibility');
+      console.log('Socket configured with both polling and WebSocket transport');
       
       // Set up standard event listeners
       this.setupEventListeners();
       
-      // Set up special listeners just for this connection attempt
+      // Set connection timeout
+      const connectionTimeout = setTimeout(() => {
+        if (this.socket && !this.isConnected) {
+          console.log('Connection attempt timed out');
+          this.socket.disconnect();
+          this.socket = null;
+          resolve(false);
+        }
+      }, 10000); // 10 second connection timeout
+      
+      // Handle successful connection
       const onConnect = () => {
-        console.log(`Socket connected successfully to ${serverUrl}!`);
+        clearTimeout(connectionTimeout);
         this.isConnected = true;
-        this.emit('connected');
+        this.reconnectAttempts = 0;
+        console.log(`Socket connected successfully to ${serverUrl}!`);
         
-        // Save successful URL for future use
-        saveLastSuccessfulURL(serverUrl)
-          .then(() => console.log(`Saved successful server URL: ${serverUrl}`))
-          .catch(() => console.warn('Failed to save server URL'));
+        // Save successful URL
+        this.saveServerUrl(serverUrl);
+        
+        // Log transport type
+        if (this.socket) {
+          const transport = this.socket.io.engine.transport.name;
+          console.log(`Active transport: ${transport}`);
           
+          // Listen for transport upgrade
+          this.socket.io.engine.on("upgrade", (transport: any) => {
+            console.log(`Transport upgraded to ${transport.name}`);
+          });
+        }
+        
+        this.emit('connected');
         resolve(true);
       };
       
+      // Handle connection error
       const onConnectError = (error: Error) => {
-        console.error(`Socket connection error to ${serverUrl}:`, error.message);
-        
-        if (this.socket) {
-          this.socket.disconnect();
-          this.socket = null;
-        }
-        
-        resolve(false);
-      };
-      
-      const onTimeout = () => {
-        console.error(`Socket connection timeout to ${serverUrl}`);
+        clearTimeout(connectionTimeout);
+        console.error(`Socket connection error: ${error.message}`);
         
         if (this.socket) {
           this.socket.disconnect();
@@ -187,20 +262,6 @@ class SocketService extends EventEmitter {
       // Add temporary listeners
       this.socket.once('connect', onConnect);
       this.socket.once('connect_error', onConnectError);
-      
-      // Set a timeout in case the connection hangs
-      const timeoutId = setTimeout(() => {
-        if (this.socket) {
-          this.socket.off('connect', onConnect);
-          this.socket.off('connect_error', onConnectError);
-          onTimeout();
-        }
-      }, 5000);
-      
-      // Clean up timeout if we connect successfully
-      this.socket.once('connect', () => {
-        clearTimeout(timeoutId);
-      });
     });
   }
   
@@ -225,16 +286,40 @@ class SocketService extends EventEmitter {
   }
   
   /**
-   * Emit an event to the server
+   * Get the current transport being used (polling or websocket)
+   */
+  getCurrentTransport(): string | null {
+    if (!this.socket || !this.socket.io || !this.socket.io.engine) {
+      return null;
+    }
+    return this.socket.io.engine.transport.name;
+  }
+  
+  /**
+   * Get the current server URL being used
+   */
+  getServerUrl(): string {
+    return this.serverUrl;
+  }
+  
+  /**
+   * Emit an event to the server with improved error handling
    * @param event Event name
    * @param data Event data
    */
-  sendToServer(event: string, data?: any) {
+  sendToServer(event: string, data?: any): boolean {
     if (this.socket && this.isConnected) {
-      this.socket.emit(event, data);
+      try {
+        this.socket.emit(event, data);
+        return true;
+      } catch (error) {
+        console.error(`Error sending event '${event}':`, error);
+        return false;
+      }
     } else if (event !== 'disconnected') {
       console.warn(`Cannot emit '${event}'. Socket not connected.`);
     }
+    return false;
   }
   
   /**
@@ -245,6 +330,13 @@ class SocketService extends EventEmitter {
   listenToServer(event: string, callback: (...args: any[]) => void) {
     if (this.socket) {
       this.socket.on(event, callback);
+    } else {
+      // Queue this listener to be added when socket connects
+      this.once('connected', () => {
+        if (this.socket) {
+          this.socket.on(event, callback);
+        }
+      });
     }
     return this; // Return this for method chaining
   }
@@ -278,6 +370,12 @@ class SocketService extends EventEmitter {
       console.log(`Socket disconnected: ${reason}`);
       this.isConnected = false;
       this.emit('disconnected', reason);
+      
+      // Only attempt automatic reconnection for transient errors
+      if (reason === 'io server disconnect' || reason === 'io client disconnect') {
+        // Don't attempt to reconnect - explicit disconnect
+        console.log('Explicit disconnect, not attempting reconnection');
+      }
     });
     
     this.socket.on('connect_error', (error) => {
@@ -291,9 +389,22 @@ class SocketService extends EventEmitter {
       }
     });
     
-    this.socket.on('error', (error) => {
-      console.error('Socket error:', error);
-      this.emit('error', error);
+    // Listen for explicit errors from server
+    this.socket.on('error', (errorData: any) => {
+      console.error('Server sent error:', errorData);
+      
+      // Emit error event with the message
+      const errorMessage = typeof errorData === 'string' 
+        ? errorData 
+        : errorData.message || 'Unknown error';
+        
+      this.emit('server_error', errorMessage);
+    });
+    
+    // Listen for auth errors
+    this.socket.on('auth_error', (errorData: any) => {
+      console.error('Authentication error:', errorData);
+      this.emit('auth_error', errorData);
     });
   }
 }
