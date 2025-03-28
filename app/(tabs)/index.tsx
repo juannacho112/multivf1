@@ -15,6 +15,7 @@ import { MainGame } from '../../components/MainGame';
 import { generateRandomDeck, fullCardPool } from '../../data/cardData';
 import { Card } from '../../models/Card';
 import { DeckNavigationProvider } from '../../contexts/NavigationContext';
+import { MultiplayerProvider } from '../../components/multiplayer/contexts/MultiplayerContext';
 
 // Game modes
 type GameMode = 'menu' | 'deckBuildingP1' | 'deckBuildingP2' | 'battle' | 'game' | 'myDecks' | 'deckEditor';
@@ -144,10 +145,12 @@ const goBack = () => {
         );
       case 'game':
         return (
-          <MainGame
-            initialMode="multiplayer"
-            onExit={goBackToMenu}
-          />
+          <MultiplayerProvider>
+            <MainGame
+              initialMode="multiplayer"
+              onExit={goBackToMenu}
+            />
+          </MultiplayerProvider>
         );
       // Explore case removed as requested
       case 'myDecks':

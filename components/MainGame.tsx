@@ -81,17 +81,7 @@ export const MainGame: React.FC<MainGameProps & { initialMode?: string }> = ({
   
   // Render game content based on mode
   const renderGameContent = () => {
-    if (gameMode === GameMode.LOADING) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4CAF50" />
-          <Text style={styles.loadingText}>Loading Game...</Text>
-        </View>
-      );
-    }
-    
-    // Skip the intermediate menu when initialMode is 'multiplayer'
-    // This ensures we go directly to auth when coming from main menu
+    // For initialMode="multiplayer", go straight to auth screen
     if (initialMode === 'multiplayer') {
       return (
         <MultiplayerNavigator 
@@ -101,6 +91,16 @@ export const MainGame: React.FC<MainGameProps & { initialMode?: string }> = ({
       );
     }
     
+    if (gameMode === GameMode.LOADING) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#4CAF50" />
+          <Text style={styles.loadingText}>Loading Game...</Text>
+        </View>
+      );
+    }
+    
+    // Single player menu only - removed multiplayer option
     if (gameMode === GameMode.MAIN_MENU) {
       return (
         <View style={styles.modeSelectContainer}>
@@ -112,14 +112,6 @@ export const MainGame: React.FC<MainGameProps & { initialMode?: string }> = ({
           >
             <Text style={styles.modeButtonText}>Single Player</Text>
             <Text style={styles.modeButtonSubtext}>Play against AI</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.modeButton, styles.multiPlayerButton]}
-            onPress={() => setGameMode(GameMode.MULTIPLAYER)}
-          >
-            <Text style={styles.modeButtonText}>Battle Online</Text>
-            <Text style={styles.modeButtonSubtext}>Play against other players</Text>
           </TouchableOpacity>
           
           {onExit && (
@@ -155,8 +147,14 @@ export const MainGame: React.FC<MainGameProps & { initialMode?: string }> = ({
     return null;
   };
   
-  // For multiplayer mode, wrap the content in the MultiplayerProvider
+  // For multiplayer mode, wrap the content in the MultiplayerProvider (unless already wrapped by parent)
   const renderWithProvider = (content: React.ReactNode) => {
+    // Skip wrapping if we're in direct multiplayer mode since parent already wraps
+    if (initialMode === 'multiplayer') {
+      return content;
+    }
+    
+    // Only wrap in MultiplayerProvider if we're in multiplayer mode
     if (gameMode === GameMode.MULTIPLAYER) {
       return (
         <MultiplayerProvider>
