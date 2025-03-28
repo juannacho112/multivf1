@@ -15,31 +15,98 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+// Define allowed origins based on environment
+const allowedOrigins = [
+  'https://vf.studioboost.pro',
+  'http://vf.studioboost.pro',
+  'https://veefriends.studioboost.pro',
+  'http://veefriends.studioboost.pro',
+  'http://localhost:3000',
+  'http://localhost:8081',
+  'http://localhost:19006',
+  'http://localhost:19000',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:8081',
+  'http://127.0.0.1:19006',
+  'http://127.0.0.1:19000',
+  'capacitor://localhost',
+  'ionic://localhost',
+  'http://localhost',
+  'https://localhost',
+  'http://localhost:*',
+  'https://localhost:*'
+];
+
 // Setup Socket.IO with CORS and better connection settings
 const io = new Server(server, {
   cors: {
-    // Allow any origin to connect
-    origin: '*',
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is allowed
+      if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.some(pattern => {
+        return origin.match(new RegExp(pattern.replace('*', '.*')));
+      })) {
+        callback(null, true);
+      } else {
+        console.log(`CORS blocked origin: ${origin}`);
+        // Still allow for debugging purposes in development
+        if (process.env.NODE_ENV !== 'production') {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ["my-custom-header", "Content-Type", "Authorization"]
+    allowedHeaders: ["my-custom-header", "Content-Type", "Authorization", "Access-Control-Allow-Origin"],
+    exposedHeaders: ["Content-Length", "X-Requested-With"],
   },
-  // Improve connection reliability
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  connectTimeout: 30000,
-  // Enable polling first then upgrade to WebSocket - better for mobile and problematic networks
-  transports: ['polling', 'websocket'],
+  // Extremely permissive settings for troubleshooting
+  pingTimeout: 300000, // 5 minute timeout
+  pingInterval: 5000, // 5 second ping
+  connectTimeout: 120000, // 2 minute connect timeout
+  // Use only polling (most compatible)
+  transports: ['polling'],
   // Better error handling and logging
   allowEIO3: true, // Support both Socket.IO v2 and v3 clients
-  maxHttpBufferSize: 1e8, // 100MB for larger payloads
+  maxHttpBufferSize: 1e6, // 1MB buffer
+  path: '/socket.io/', // Explicitly set path
+  // Additional settings
+  serveClient: false, // Don't serve client files
+  cookie: false, // Disable cookies for better mobile compatibility
 });
 
-// Log socket server configuration
+// Log socket server configuration with more details
 console.log('Socket.IO server configured with:', {
-  transports: ['polling', 'websocket'],
-  pingTimeout: '60000ms',
-  pingInterval: '25000ms'
+  transports: ['polling'],
+  pingTimeout: '300000ms',
+  pingInterval: '5000ms',
+  connectTimeout: '120000ms',
+  cors: 'dynamic validation with allowed origins'
+});
+
+// Add a route specifically for socket.io connection testing
+app.get('/socket-test', (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Cache-Control', 'no-store');
+  res.status(200).send({
+    status: 'socket-io-ready',
+    timestamp: new Date().toISOString(),
+    transports: ['polling'],
+    allowedOrigins: allowedOrigins
+  });
+});
+
+// Add debug logging for transport upgrades
+io.engine.on("connection", (socket) => {
+  console.log(`New connection ${socket.id} with transport: ${socket.transport.name}`);
+  
+  socket.transport.on("upgrade", (transport) => {
+    console.log(`Connection ${socket.id} upgraded from ${socket.transport.name} to ${transport.name}`);
+  });
 });
 
 // Set up access control headers for express

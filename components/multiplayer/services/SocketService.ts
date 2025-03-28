@@ -7,13 +7,20 @@ import { Platform } from 'react-native';
 // Trying multiple connection URLs to improve connection reliability
 // The first one that works will be used
 const SERVER_URLS = [
-  'https://veefriends.studioboost.pro', // Production server URL
-  'http://localhost:3000',     // Works with web browser on same machine
-  'http://127.0.0.1:3000',     // Alternative localhost
-  'http://10.0.2.2:3000',      // Android emulator special case for localhost
-  'http://192.168.126.128:3000', // Host machine IP
-  'http://0.0.0.0:3000'        // Listen on all interfaces
+  'https://vf.studioboost.pro', // Production server URL with HTTPS
+  'https://vf.studioboost.pro:3000', // Production server with explicit port
+  'http://vf.studioboost.pro', // Production server with HTTP fallback
+  '//', // Same-origin relative URL - this often works best when frontend and backend are on same domain
+  'http://localhost:3000', // Works with web browser on same machine
+  'http://127.0.0.1:3000', // Alternative localhost
+  'http://10.0.2.2:3000', // Android emulator special case for localhost
 ];
+
+// Force production URL when in production
+if (process.env.NODE_ENV === 'production') {
+  // In production, prioritize same-origin connections
+  SERVER_URLS.unshift('//');
+}
 
 // Platform-specific default server URL
 let SERVER_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
@@ -123,15 +130,20 @@ class SocketService extends EventEmitter {
       console.log(`Attempting to connect to ${serverUrl} with auth:`, 
         auth.isGuest ? 'Guest auth' : 'Token auth');
       
-      // Initialize socket with auth data
+      // Initialize socket with auth data - match backend settings
       this.socket = io(serverUrl, {
         auth,
         reconnection: true,
-        reconnectionAttempts: this.maxReconnectAttempts,
-        reconnectionDelay: this.reconnectDelay,
-        timeout: 15000, // Longer timeout to ensure connection completes
-        transports: ['polling', 'websocket'] // Try polling first (more reliable), then upgrade to websocket
+        reconnectionAttempts: Infinity, // Unlimited reconnection attempts
+        reconnectionDelay: 1000, // Start with a 1-second delay
+        reconnectionDelayMax: 10000, // Max 10 seconds between attempts
+        timeout: 60000, // Match backend timeout (60 seconds)
+        transports: ['polling'], // Use only polling initially for maximum compatibility
+        forceNew: true, // Force new connection
+        path: '/socket.io/', // Explicitly set path to match backend
       });
+      
+      console.log('Socket configured with polling-only transport for better compatibility');
       
       // Set up standard event listeners
       this.setupEventListeners();

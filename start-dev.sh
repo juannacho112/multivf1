@@ -3,41 +3,62 @@
 # Terminal colors
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== VeeFriends Card Game Development Launcher ===${NC}"
-echo -e "${YELLOW}Starting development servers...${NC}"
+echo -e "${BLUE}Starting VeeFriends Card Game Development Server${NC}"
+echo -e "${YELLOW}----------------------------------------------${NC}"
 
-# Function to handle cleanup on exit
-cleanup() {
-  echo -e "${YELLOW}\nShutting down development servers...${NC}"
-  kill $BACKEND_PID $FRONTEND_PID 2>/dev/null
-  exit 0
-}
+# Check if MongoDB is running
+echo -e "${BLUE}Checking if MongoDB is running...${NC}"
+if command -v mongod &> /dev/null; then
+  if pgrep -x "mongod" > /dev/null; then
+    echo -e "${GREEN}MongoDB is already running.${NC}"
+  else
+    echo -e "${YELLOW}MongoDB is not running. Starting MongoDB...${NC}"
+    if [ -x "$(command -v systemctl)" ]; then
+      sudo systemctl start mongodb || echo -e "${RED}Failed to start MongoDB with systemctl${NC}"
+    else
+      mongod --fork --logpath /tmp/mongod.log || echo -e "${RED}Failed to start MongoDB manually${NC}"
+    fi
+  fi
+else
+  echo -e "${YELLOW}MongoDB command not found. You may need to start it manually.${NC}"
+fi
 
-# Register the cleanup function for when script exits
-trap cleanup SIGINT SIGTERM
+# Start the backend server in a new terminal
+echo -e "${BLUE}Starting backend server...${NC}"
+cd backend
+if command -v gnome-terminal &> /dev/null; then
+  gnome-terminal -- bash -c "npm run dev; read -p 'Press enter to close...'"
+elif command -v xterm &> /dev/null; then
+  xterm -e "npm run dev; read -p 'Press enter to close...'" &
+else
+  echo -e "${YELLOW}Starting backend in background...${NC}"
+  npm run dev &
+  BACKEND_PID=$!
+  echo -e "${GREEN}Backend server started with PID: ${BACKEND_PID}${NC}"
+fi
 
-# Start Backend Server
-echo -e "${GREEN}Starting backend server...${NC}"
-cd backend && npm run dev &
-BACKEND_PID=$!
-echo -e "${GREEN}Backend server started with PID: $BACKEND_PID${NC}"
+# Go back to root directory
+cd ..
 
-# Wait a bit for backend to initialize
-sleep 2
+# Start the frontend server
+echo -e "${BLUE}Starting frontend app...${NC}"
+echo -e "${YELLOW}Note: The frontend will open automatically in your browser.${NC}"
+echo -e "${YELLOW}Socket.IO is configured to connect to: http://localhost:3000${NC}"
+echo -e "${GREEN}----------------------------------------------${NC}"
 
-# Start Frontend
-echo -e "${GREEN}Starting frontend application...${NC}"
-npm run start &
-FRONTEND_PID=$!
-echo -e "${GREEN}Frontend application started with PID: $FRONTEND_PID${NC}"
+# In production, use:
+# SOCKET_URL=https://vf.studioboost.pro npm start
+npm start
 
-echo -e "${BLUE}\nDevelopment servers running:${NC}"
-echo -e " - ${YELLOW}Backend:${NC} http://localhost:3000"
-echo -e " - ${YELLOW}Frontend:${NC} Metro bundler \n"
-echo -e "${BLUE}Press Ctrl+C to stop all servers${NC}"
+# If we started the backend in background, kill it when this script exits
+if [ -n "$BACKEND_PID" ]; then
+  echo -e "${BLUE}Stopping backend server...${NC}"
+  kill $BACKEND_PID
+  echo -e "${GREEN}Backend server stopped.${NC}"
+fi
 
-# Wait for user to cancel with Ctrl+C
-wait
+echo -e "${GREEN}Development environment shutdown complete.${NC}"

@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useMultiplayer } from '../contexts/MultiplayerContext';
 import socketService from '../services/SocketService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthScreenProps {
   onAuthSuccess: () => void;
@@ -66,9 +67,9 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
           setError('Registration failed. Username or email may already be in use.');
         }
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Auth error:', err);
-      setError('An error occurred. Please try again.');
+      setError(`Authentication error: ${err instanceof Error ? err.message : 'Unknown error occurred'}`);
     } finally {
       setLoading(false);
     }
@@ -86,22 +87,43 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
       // Show connecting message
       setError('Connecting to server...');
       
-      // Force disconnect any existing connection first
+      // Ensure no active connection exists
       socketService.disconnect();
       
-      // Try to connect with guest mode, with retry logic
+      // Clear any stored socket URLs to force fresh connection attempts
+      try {
+        await AsyncStorage.removeItem('lastSuccessfulServerURL');
+        console.log('AuthScreen: Cleared cached server URL for fresh connection');
+      } catch (e) {
+        console.warn('AuthScreen: Could not clear cached server URL');
+      }
+      
+      // Extended retry logic for guest connection
       let connected = false;
       let attempts = 0;
-      const maxAttempts = 3;
+      const maxAttempts = 5; // Increased max attempts
       
       while (!connected && attempts < maxAttempts) {
         attempts++;
         console.log(`AuthScreen: Guest connection attempt ${attempts}/${maxAttempts}`);
-        connected = await socketService.connect(true); // true = connect as guest
+        
+        try {
+          connected = await socketService.connect(true); // true = connect as guest
+          
+          if (connected) {
+            console.log('AuthScreen: Connection succeeded on attempt', attempts);
+            break;
+          } else {
+            console.log('AuthScreen: Connection returned false on attempt', attempts);
+          }
+        } catch (connectErr) {
+          console.error(`AuthScreen: Connection error on attempt ${attempts}:`, connectErr);
+        }
         
         if (!connected && attempts < maxAttempts) {
-          // Wait a moment before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          const waitTime = attempts * 1000; // Increasing backoff
+          setError(`Connection attempt ${attempts} failed. Retrying in ${waitTime/1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
         }
       }
       
@@ -109,21 +131,21 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
       
       if (connected) {
         console.log('AuthScreen: Guest connection successful, proceeding to lobby');
+        setError('Connection successful! Loading lobby...');
         
-        // Increase delay to allow socket events to be fully processed
-        // This is important for proper state updates to occur
+        // Longer delay to ensure all socket events and state updates complete
         setTimeout(() => {
           console.log('AuthScreen: Navigating to lobby after delay');
           onAuthSuccess();
-        }, 2500); // Increased from 1000 to 2500ms for more reliable state propagation
+        }, 3500); // Further increased delay for more reliable navigation
       } else {
         console.error('AuthScreen: Failed to connect as guest after multiple attempts');
-        setError('Failed to connect to server. Please check your network connection and try again.');
+        setError(`Failed to connect after ${maxAttempts} attempts. Please check your network and server status.`);
         setLoading(false);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Guest login error:', err);
-      setError('An error occurred. Please try again.');
+      setError(`Connection error: ${err instanceof Error ? err.message : 'Unknown error'}`);
       setLoading(false);
     }
   };

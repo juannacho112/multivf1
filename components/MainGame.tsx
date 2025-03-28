@@ -90,6 +90,17 @@ export const MainGame: React.FC<MainGameProps & { initialMode?: string }> = ({
       );
     }
     
+    // Skip the intermediate menu when initialMode is 'multiplayer'
+    // This ensures we go directly to auth when coming from main menu
+    if (initialMode === 'multiplayer') {
+      return (
+        <MultiplayerNavigator 
+          initialScreen="Auth"
+          onExit={onExit || handleBackToMainMenu}
+        />
+      );
+    }
+    
     if (gameMode === GameMode.MAIN_MENU) {
       return (
         <View style={styles.modeSelectContainer}>
