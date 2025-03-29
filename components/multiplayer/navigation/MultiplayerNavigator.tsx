@@ -34,17 +34,28 @@ const MultiplayerNavigator: React.FC<MultiplayerNavigatorProps> = ({ onExit, ini
     const newState = {
       isAuthenticated,
       isConnected,
-      activeGame,
+      activeGame: activeGame ? {
+        gameId: activeGame.gameId,
+        status: activeGame.status
+      } : null,
       currentScreen
     };
     console.log('Navigator state update:', newState);
 
-    // First check for existing game
+    // First check for existing game - highest priority
     if (activeGame) {
+      console.log(`Navigator: Active game detected with status: ${activeGame.status}`);
+      
       if (activeGame.status === 'waiting') {
-        setCurrentScreen('Waiting');
+        if (currentScreen !== 'Waiting') {
+          console.log(`Navigator: Navigating to waiting room for game ${activeGame.gameId}`);
+          setCurrentScreen('Waiting');
+        }
       } else if (['active', 'completed'].includes(activeGame.status)) {
-        setCurrentScreen('Game');
+        if (currentScreen !== 'Game') {
+          console.log(`Navigator: Navigating to game screen for game ${activeGame.gameId}`);
+          setCurrentScreen('Game');
+        }
       }
       return;
     }

@@ -263,6 +263,13 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
     
     // Game events
     const handleGameCreated = (data: { gameId: string, gameCode: string, players: any[] }) => {
+      console.log(`MultiplayerContext: Game created with ID: ${data.gameId}, code: ${data.gameCode}`);
+      
+      // Force the connection state to true when a game is created
+      // This ensures the UI reflects that we're properly connected to the server
+      setIsConnected(true);
+      
+      // Create the active game state with the received data
       setActiveGame({
         gameId: data.gameId,
         gameCode: data.gameCode,
@@ -282,6 +289,8 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
         potSize: 1,
         winner: null
       });
+      
+      console.log('MultiplayerContext: Active game state set, status: waiting');
     };
     
     const handleGamePlayerJoined = (data: { gameId: string, player: any, players: any[] }) => {

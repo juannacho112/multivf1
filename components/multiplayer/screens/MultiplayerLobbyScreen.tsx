@@ -38,6 +38,7 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({ 
     setErrorMessage(null);
     setIsLoading(true);
     try {
+      console.log('MultiplayerLobbyScreen: Starting matchmaking');
       joinMatchmaking();
       // Navigation will happen via the context when matched
     } catch (error) {

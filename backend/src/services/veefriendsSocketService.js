@@ -583,8 +583,13 @@ const processMatchmaking = async (io) => {
     const player1Socket = io.sockets.sockets.get(player1.socketId);
     const player2Socket = io.sockets.sockets.get(player2.socketId);
     
+    console.log(`Matchmaking: Found sockets for player1: ${!!player1Socket}, player2: ${!!player2Socket}`);
+    
     if (player1Socket) {
       player1Socket.join(`game:${game._id}`);
+      console.log(`Player 1 (${player1.username}) joined room game:${game._id}`);
+      
+      // Send matched event
       player1Socket.emit('matchmaking:matched', {
         gameId: game._id,
         opponent: {
@@ -595,15 +600,21 @@ const processMatchmaking = async (io) => {
         }
       });
       
+      console.log(`Sent matchmaking:matched event to player1 (${player1.username})`);
+      
       // Update connection mapping
       const connection = activeConnections.get(player1.socketId);
       if (connection) {
         connection.gameId = game._id;
+        console.log(`Updated connection mapping for player1 (${player1.username}) with gameId ${game._id}`);
       }
     }
     
     if (player2Socket) {
       player2Socket.join(`game:${game._id}`);
+      console.log(`Player 2 (${player2.username}) joined room game:${game._id}`);
+      
+      // Send matched event
       player2Socket.emit('matchmaking:matched', {
         gameId: game._id,
         opponent: {
@@ -614,21 +625,41 @@ const processMatchmaking = async (io) => {
         }
       });
       
+      console.log(`Sent matchmaking:matched event to player2 (${player2.username})`);
+      
       // Update connection mapping
       const connection = activeConnections.get(player2.socketId);
       if (connection) {
         connection.gameId = game._id;
+        console.log(`Updated connection mapping for player2 (${player2.username}) with gameId ${game._id}`);
       }
     }
     
     console.log(`Matchmaking: Created game ${game._id} between ${player1.username} and ${player2.username}`);
     
-    // Notify both players the game is ready
-    io.to(`game:${game._id}`).emit('game:created', {
-      gameId: game._id,
-      gameCode: game.gameCode,
-      players: game.players
-    });
+    // CRITICAL: Delay game:created event slightly to ensure clients have processed matchmaking:matched events
+    setTimeout(() => {
+      console.log(`Emitting game:created event to room game:${game._id}`);
+      
+      // Notify both players the game is ready
+      io.to(`game:${game._id}`).emit('game:created', {
+        gameId: game._id,
+        gameCode: game.gameCode,
+        players: game.players
+      });
+      
+      console.log(`Game:created event emitted successfully`);
+      
+      // Force setting both players as ready to automatically start the game
+      console.log(`Auto-setting both players as ready to start game`);
+      game.players[0].isReady = true;
+      game.players[1].isReady = true;
+      game.save().then(() => {
+        // Start game directly
+        console.log(`Starting game ${game._id} automatically`);
+        startGame(io, game);
+      });
+    }, 500); // 500ms delay
   } catch (error) {
     console.error('Error in matchmaking:', error);
     
