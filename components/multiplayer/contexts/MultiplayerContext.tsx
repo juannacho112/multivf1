@@ -172,8 +172,11 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
     const handleConnected = () => {
       console.log('MultiplayerContext: Socket connected event received');
       
-      // Immediately update connected state
+      // Immediately update connected state with useEffect-safe state update
       setIsConnected(true);
+      
+      // Log the connection success
+      console.log('MultiplayerContext: Connection status updated to CONNECTED');
       
       // If connecting as guest, set authenticated state and create guest user object
       if (isGuest) {
@@ -193,7 +196,7 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
         
         console.log('MultiplayerContext: Created guest user:', guestUser);
         
-        // Set the user and authentication in state
+        // Set the user and authentication in state in a safe way for React's state batching
         setCurrentUser(guestUser);
         setIsAuthenticated(true);
         
@@ -212,6 +215,9 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
           username: guestUsername,
           displayName: guestUsername
         });
+      } else {
+        // For regular users, request updated user data to ensure we have the latest
+        socketService.sendToServer('user:getProfile');
       }
     };
     
