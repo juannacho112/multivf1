@@ -30,9 +30,21 @@ export const MultiplayerNavigator: React.FC<MultiplayerNavigatorProps> = ({
       return;
     }
     
-    // If authenticated but not connected, don't navigate yet - loading screen will show
-    if (!isConnected) {
+    // Critical fix: If authenticated, immediately check if we need to go to lobby
+    if (isAuthenticated && isConnected) {
+      // Only navigate if we're not already in the right screen to prevent loops
+      if (currentScreen === 'Auth') {
+        console.log('Navigator: Successfully authenticated, moving to Lobby');
+        setCurrentScreen('Lobby');
+        return;
+      }
+    }
+    
+    // If authenticated but not connected, show loading screen and wait but don't change screen
+    if (!isConnected && isAuthenticated) {
       console.log('Navigator: Authenticated but waiting for connection');
+      // Don't change currentScreen - this allows the loading screen to appear
+      // but preserves our current screen state
       return;
     }
     
@@ -40,21 +52,30 @@ export const MultiplayerNavigator: React.FC<MultiplayerNavigatorProps> = ({
       if (activeGame.status === 'waiting') {
         console.log('Navigator: Game waiting, setting screen to WaitingRoom');
         setCurrentScreen('WaitingRoom');
-      } else if (activeGame.status === 'active' || 
-                activeGame.status === 'completed' || 
-                activeGame.status === 'abandoned') {
+      } else if (['active', 'completed', 'abandoned'].includes(activeGame.status)) {
         console.log('Navigator: Game active/completed/abandoned, setting screen to Battle');
         setCurrentScreen('Battle');
       }
-    } else if (isAuthenticated && isConnected) {
-      console.log('Navigator: Authenticated and connected, setting screen to Lobby');
-      setCurrentScreen('Lobby');
     }
-  }, [isAuthenticated, isConnected, activeGame]);
+    // Existing fallback for setting lobby screen is handled above
+  }, [isAuthenticated, isConnected, activeGame, currentScreen]);
 
-  // Handle screen transitions
+  // Handle screen transitions - force move to lobby after auth success 
   const handleAuthSuccess = () => {
+    // First, set the screen state
     setCurrentScreen('Lobby');
+    
+    // Force a state refresh in parent components if needed
+    console.log('Navigator: Forced navigation to Lobby after auth success');
+    
+    // This additional callback ensures the navigation works even if context
+    // state updates are delayed
+    setTimeout(() => {
+      if (isAuthenticated && isConnected) {
+        setCurrentScreen('Lobby');
+        console.log('Navigator: Double-checking lobby navigation');
+      }
+    }, 1000);
   };
 
   // Render current screen

@@ -228,9 +228,8 @@ class SocketService extends SimpleEventEmitter {
         // Important additional settings
         path: '/socket.io/',
         
-        // Add request headers for CORS compatibility
+        // Add compatible request headers that work in browsers
         extraHeaders: {
-          "User-Agent": "VeeFriendsClient/1.0",
           "Accept": "*/*"
         }
       });

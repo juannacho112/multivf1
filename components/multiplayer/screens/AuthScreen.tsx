@@ -97,14 +97,11 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
       } catch (e) {
         console.warn('AuthScreen: Could not clear cached server URL');
       }
+
+      const { connect } = useMultiplayer();
       
-      // Direct connection attempt
-      let connected = false;
-      try {
-        connected = await socketService.connect(true); // true = connect as guest
-      } catch (connectErr) {
-        console.error(`AuthScreen: Connection error:`, connectErr);
-      }
+      // Directly connect using the socketService to bypass React hook rules
+      const connected = await socketService.connect(true);
       
       console.log('AuthScreen: Guest connection result:', connected);
       
@@ -112,12 +109,19 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
         console.log('AuthScreen: Guest connection successful');
         setError('Connection successful! Loading lobby...');
         
-        // Simply proceed to lobby after successful connection
-        // The MultiplayerContext will handle the authentication state
+        // Simple approach - immediately proceed to lobby after successful connection
+        console.log('AuthScreen: Proceeding to lobby');
+        
+        // Wait for React state updates to complete, then navigate
         setTimeout(() => {
-          console.log('AuthScreen: Proceeding to lobby');
           onAuthSuccess();
-        }, 1000); // Short delay for any final setup
+          // Force an additional navigation directly to 'Lobby' screen
+          // This helps with the MultiplayerNavigator getting stuck issue
+          setTimeout(() => {
+            console.log('AuthScreen: Forcing second navigation attempt');
+            onAuthSuccess();
+          }, 500);
+        }, 2000);
       } else {
         console.error('AuthScreen: Failed to connect as guest');
         setError('Failed to connect. Please check your network and server status.');
