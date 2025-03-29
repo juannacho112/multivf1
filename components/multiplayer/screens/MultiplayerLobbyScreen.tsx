@@ -181,6 +181,9 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({ 
     <SafeAreaView style={styles.container}>
       <StatusBar style="auto" />
       
+      {/* Show connection banner at the top if not connected */}
+      {connectionBanner}
+      
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Header */}
         <View style={styles.header}>
@@ -286,6 +289,20 @@ const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
     padding: 16,
+  },
+  connectionBanner: {
+    backgroundColor: '#2196F3',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  connectionBannerText: {
+    color: 'white',
+    marginLeft: 10,
+    fontWeight: 'bold',
   },
   centerContainer: {
     flex: 1,
