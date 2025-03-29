@@ -29,14 +29,28 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
   const [error, setError] = useState<string>('');
   const [attemptedGuestLogin, setAttemptedGuestLogin] = useState(false);
 
-  // Check for successful authentication and connection to trigger navigation
+  // Check for successful authentication to trigger navigation, regardless of connection status
   useEffect(() => {
-    if (attemptedGuestLogin && isAuthenticated && isConnected) {
-      console.log('AuthScreen: Detected successful authentication and connection. Proceeding to lobby.');
-      // Navigate to lobby
-      onAuthSuccess();
+    // Navigate to lobby if authentication is successful, regardless of connection status
+    if (isAuthenticated) {
+      console.log('AuthScreen: Detected successful authentication. Proceeding to lobby.');
+      // Add a small delay to ensure state updates properly propagate
+      setTimeout(() => {
+        onAuthSuccess();
+      }, 300);
     }
-  }, [attemptedGuestLogin, isAuthenticated, isConnected, onAuthSuccess]);
+  }, [isAuthenticated, onAuthSuccess]);
+  
+  // Additional useEffect for guest login to handle that special case
+  useEffect(() => {
+    if (attemptedGuestLogin && isAuthenticated) {
+      console.log('AuthScreen: Detected successful guest authentication. Proceeding to lobby.');
+      // Navigate to lobby with a small delay to ensure state propagation
+      setTimeout(() => {
+        onAuthSuccess();
+      }, 300);
+    }
+  }, [attemptedGuestLogin, isAuthenticated, onAuthSuccess]);
 
   const handleSubmit = async () => {
     setError('');

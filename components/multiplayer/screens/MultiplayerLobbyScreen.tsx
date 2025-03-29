@@ -123,20 +123,15 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({ 
     }
   }, [activeGame]);
   
-  // Check connection status
-  if (!isConnected) {
-    console.log('Lobby screen showing disconnected state');
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="auto" />
-        <View style={styles.centerContainer}>
-          <Text style={styles.titleText}>Connecting to server...</Text>
-          <ActivityIndicator size="large" color="#4CAF50" />
-          <Text style={styles.subtitleText}>Please wait while we connect to the VeeFriends server</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // We'll show a connection banner instead of blocking the entire UI
+  const connectionBanner = !isConnected && (
+    <View style={styles.connectionBanner}>
+      <ActivityIndicator size="small" color="white" />
+      <Text style={styles.connectionBannerText}>
+        Connecting to server...
+      </Text>
+    </View>
+  );
   
   // Render matchmaking UI
   if (matchmaking.inQueue) {
