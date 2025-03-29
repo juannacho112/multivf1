@@ -1,123 +1,119 @@
 #!/bin/bash
 
+# Development startup script for VeeFriends Card Game Server
+# Run with: ./start-dev.sh
+
 # Terminal colors
 GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}Starting VeeFriends Card Game Development Server${NC}"
-echo -e "${YELLOW}----------------------------------------------${NC}"
+echo -e "${BLUE}=== VeeFriends Card Game Development Server ===${NC}"
 
-# Check for required commands
-check_command() {
-  if ! command -v $1 &> /dev/null; then
-    echo -e "${RED}Error: $1 is not installed. Please install it before continuing.${NC}"
-    return 1
-  fi
-  return 0
-}
-
-# Check for Node.js
-if ! check_command node; then
-  echo -e "${RED}Please install Node.js from https://nodejs.org/${NC}"
-  exit 1
+# Check if Node.js is installed
+if ! command -v node &> /dev/null; then
+    echo -e "${RED}Node.js is not installed. Please install Node.js first.${NC}"
+    exit 1
 fi
 
-# Check for NPM
-if ! check_command npm; then
-  echo -e "${RED}NPM is required but not found. It typically comes with Node.js installation.${NC}"
-  exit 1
+# Create logs directory if it doesn't exist
+mkdir -p logs
+
+# Check for .env file in backend directory
+if [ ! -f backend/.env ]; then
+    echo -e "${YELLOW}No .env file found in backend directory. Creating from example...${NC}"
+    
+    if [ -f backend/.Examplenv ]; then
+        cp backend/.Examplenv backend/.env
+        echo -e "${GREEN}Created .env file from example.${NC}"
+    else
+        echo -e "${YELLOW}No .Examplenv file found. Creating a basic .env file...${NC}"
+        echo "PORT=3000" > backend/.env
+        echo "MONGODB_URI=mongodb://localhost:27017/veefriends" >> backend/.env
+        echo "JWT_SECRET=dev-jwt-secret-replace-in-production" >> backend/.env
+        echo -e "${GREEN}Created basic .env file.${NC}"
+    fi
+    
+    echo -e "${YELLOW}You may want to check and update settings in backend/.env${NC}"
 fi
 
 # Install backend dependencies if needed
 echo -e "${BLUE}Checking backend dependencies...${NC}"
-cd backend
-if [ ! -d "node_modules" ] || [ ! -f "node_modules/.package-lock.json" ]; then
-  echo -e "${YELLOW}Installing backend dependencies...${NC}"
-  npm install
-  if [ $? -ne 0 ]; then
-    echo -e "${RED}Failed to install backend dependencies.${NC}"
-    exit 1
-  fi
-  echo -e "${GREEN}Backend dependencies installed successfully.${NC}"
+if [ ! -d backend/node_modules ]; then
+    echo -e "${YELLOW}Installing backend dependencies...${NC}"
+    cd backend && npm install
+    cd ..
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Failed to install backend dependencies.${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}Backend dependencies installed.${NC}"
 else
-  echo -e "${GREEN}Backend dependencies already installed.${NC}"
+    echo -e "${GREEN}Backend dependencies already installed.${NC}"
 fi
 
-# Check if MongoDB is running
-echo -e "${BLUE}Checking if MongoDB is running...${NC}"
-if command -v mongod &> /dev/null; then
-  if pgrep -x "mongod" > /dev/null; then
-    echo -e "${GREEN}MongoDB is already running.${NC}"
-  else
-    echo -e "${YELLOW}MongoDB is not running. Starting MongoDB...${NC}"
-    if [ -x "$(command -v systemctl)" ]; then
-      echo -e "${YELLOW}Attempting to start MongoDB with systemctl...${NC}"
-      systemctl start mongod || sudo systemctl start mongod || echo -e "${RED}Failed to start MongoDB with systemctl${NC}"
-    else
-      echo -e "${YELLOW}Attempting to start MongoDB manually...${NC}"
-      mongod --fork --logpath /tmp/mongod.log || echo -e "${RED}Failed to start MongoDB manually${NC}"
-    fi
-  fi
+# Check if nodemon is installed
+NODEMON_AVAILABLE=false
+if command -v nodemon &> /dev/null || [ -f "backend/node_modules/.bin/nodemon" ]; then
+    NODEMON_AVAILABLE=true
+    echo -e "${GREEN}nodemon is available for automatic server restart.${NC}"
 else
-  echo -e "${YELLOW}MongoDB command not found. You may need to start it manually.${NC}"
-  echo -e "${YELLOW}Visit https://www.mongodb.com/docs/manual/installation/ for installation instructions.${NC}"
+    echo -e "${YELLOW}nodemon is not installed. Using node directly (no auto-restart).${NC}"
+    echo -e "${YELLOW}You can install nodemon with: npm install --save-dev nodemon${NC}"
+fi
+
+# Start MongoDB if it's installed locally and not running
+if command -v mongod &> /dev/null; then
+    echo -e "${BLUE}Checking MongoDB status...${NC}"
+    
+    # Try to connect to MongoDB
+    mongosh --eval "db.version()" --quiet &> /dev/null
+    
+    if [ $? -ne 0 ]; then
+        echo -e "${YELLOW}MongoDB not running. Starting MongoDB...${NC}"
+        
+        # Create data directory if it doesn't exist
+        mkdir -p ~/data/db
+        
+        # Start MongoDB in the background
+        mongod --dbpath ~/data/db > logs/mongodb.log 2>&1 &
+        
+        # Wait for MongoDB to start
+        sleep 3
+        
+        # Check if MongoDB started successfully
+        mongosh --eval "db.version()" --quiet &> /dev/null
+        if [ $? -ne 0 ]; then
+            echo -e "${YELLOW}Warning: Could not start MongoDB. Please make sure MongoDB is installed and running.${NC}"
+            echo -e "${YELLOW}The server will start, but database functionality will be limited.${NC}"
+        else
+            echo -e "${GREEN}MongoDB started successfully.${NC}"
+        fi
+    else
+        echo -e "${GREEN}MongoDB is already running.${NC}"
+    fi
+else
+    echo -e "${YELLOW}MongoDB not detected locally. Make sure MongoDB is running remotely or installed.${NC}"
+    echo -e "${YELLOW}Check backend/.env for the correct MONGODB_URI setting.${NC}"
 fi
 
 # Start the backend server
-echo -e "${BLUE}Starting backend server...${NC}"
+echo -e "${BLUE}Starting VeeFriends Card Game Server...${NC}"
 
-# Check if nodemon is available in node_modules
-if [ -f "node_modules/.bin/nodemon" ]; then
-  echo -e "${GREEN}Using locally installed nodemon...${NC}"
-  
-  # Try to open in a new terminal if available
-  if command -v gnome-terminal &> /dev/null; then
-    gnome-terminal -- bash -c "cd $(pwd) && npm run dev; read -p 'Press enter to close...'"
-  elif command -v xterm &> /dev/null; then
-    xterm -e "cd $(pwd) && npm run dev; read -p 'Press enter to close...'" &
-  else
-    # Fall back to running in background if no terminal available
-    echo -e "${YELLOW}Starting backend with nodemon in background...${NC}"
-    npm run dev > ../backend.log 2>&1 &
-    BACKEND_PID=$!
-    echo -e "${GREEN}Backend server started with nodemon, PID: ${BACKEND_PID}${NC}"
-    echo -e "${YELLOW}Logs available in backend.log${NC}"
-  fi
+if [ "$NODEMON_AVAILABLE" = true ]; then
+    if [ -f backend/node_modules/.bin/nodemon ]; then
+        echo -e "${GREEN}Starting server with local nodemon...${NC}"
+        cd backend && ./node_modules/.bin/nodemon src/server.js
+    else
+        echo -e "${GREEN}Starting server with global nodemon...${NC}"
+        cd backend && nodemon src/server.js
+    fi
 else
-  # If nodemon is not available, use regular node
-  echo -e "${YELLOW}Nodemon not found. Starting backend with node...${NC}"
-  node src/server.js > ../backend.log 2>&1 &
-  BACKEND_PID=$!
-  echo -e "${GREEN}Backend server started with node, PID: ${BACKEND_PID}${NC}"
-  echo -e "${YELLOW}Logs available in backend.log${NC}"
+    echo -e "${GREEN}Starting server with node...${NC}"
+    cd backend && node src/server.js
 fi
 
-# Save PID for later cleanup
-if [ -n "$BACKEND_PID" ]; then
-  echo $BACKEND_PID > ../backend.pid
-fi
-
-# Go back to root directory
-cd ..
-
-# Start the frontend server
-echo -e "${BLUE}Starting frontend app...${NC}"
-echo -e "${YELLOW}Note: The frontend will open automatically in your browser.${NC}"
-echo -e "${YELLOW}Socket.IO is configured to connect to: http://localhost:3000${NC}"
-echo -e "${GREEN}----------------------------------------------${NC}"
-
-# In production, use:
-# SOCKET_URL=https://vf.studioboost.pro npm start
-npm start
-
-# If we started the backend in background, kill it when this script exits
-if [ -n "$BACKEND_PID" ]; then
-  echo -e "${BLUE}Stopping backend server...${NC}"
-  kill $BACKEND_PID
-  echo -e "${GREEN}Backend server stopped.${NC}"
-fi
-
-echo -e "${GREEN}Development environment shutdown complete.${NC}"
+# This part will only execute if the server stops
+echo -e "${RED}Server stopped.${NC}"

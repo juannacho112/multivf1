@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -18,7 +18,8 @@ interface AuthScreenProps {
 }
 
 const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
-  const { login, register } = useMultiplayer();
+  // Get multiplayer context methods and state at component level
+  const { login, register, connect, isAuthenticated, isConnected } = useMultiplayer();
   const [isLogin, setIsLogin] = useState<boolean>(true);
   const [username, setUsername] = useState<string>('');
   const [email, setEmail] = useState<string>('');
@@ -26,6 +27,16 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
   const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const [attemptedGuestLogin, setAttemptedGuestLogin] = useState(false);
+
+  // Check for successful authentication and connection to trigger navigation
+  useEffect(() => {
+    if (attemptedGuestLogin && isAuthenticated && isConnected) {
+      console.log('AuthScreen: Detected successful authentication and connection. Proceeding to lobby.');
+      // Navigate to lobby
+      onAuthSuccess();
+    }
+  }, [attemptedGuestLogin, isAuthenticated, isConnected, onAuthSuccess]);
 
   const handleSubmit = async () => {
     setError('');
@@ -87,9 +98,6 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
       // Show connecting message
       setError('Connecting to server...');
       
-      // Ensure no active connection exists
-      socketService.disconnect();
-      
       // Clear any stored socket URLs to force fresh connection attempts
       try {
         await AsyncStorage.removeItem('lastSuccessfulServerURL');
@@ -98,8 +106,10 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
         console.warn('AuthScreen: Could not clear cached server URL');
       }
       
-      // Directly connect using the socketService - do NOT call React hooks here
-      const connected = await socketService.connect(true);
+      // IMPORTANT: Use the context's connect method instead of directly using socketService
+      // This ensures the authentication state is properly set in the context
+      console.log('AuthScreen: Using MultiplayerContext connect method');
+      const connected = await connect(true); // true = guest login
       
       console.log('AuthScreen: Guest connection result:', connected);
       
@@ -107,19 +117,10 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
         console.log('AuthScreen: Guest connection successful');
         setError('Connection successful! Loading lobby...');
         
-        // Simple approach - immediately proceed to lobby after successful connection
-        console.log('AuthScreen: Proceeding to lobby');
+        // Mark that we've attempted guest login so the useEffect can navigate when auth is confirmed
+        setAttemptedGuestLogin(true);
         
-        // Wait for React state updates to complete, then navigate
-        setTimeout(() => {
-          onAuthSuccess();
-          // Force an additional navigation directly to 'Lobby' screen
-          // This helps with the MultiplayerNavigator getting stuck issue
-          setTimeout(() => {
-            console.log('AuthScreen: Forcing second navigation attempt');
-            onAuthSuccess();
-          }, 500);
-        }, 2000);
+        // We'll rely on the useEffect to navigate once isAuthenticated and isConnected are both true
       } else {
         console.error('AuthScreen: Failed to connect as guest');
         setError('Failed to connect. Please check your network and server status.');
@@ -178,6 +179,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
       <TouchableOpacity
         style={styles.guestButton}
         onPress={handleGuestLogin}
+        disabled={loading}
       >
         <Text style={styles.guestButtonText}>Join as Guest</Text>
       </TouchableOpacity>

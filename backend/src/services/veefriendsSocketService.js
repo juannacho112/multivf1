@@ -143,6 +143,30 @@ const setupVeefriendsSocketIO = (io) => {
       gameId: null
     });
     
+    // Handle guest registration from client
+    socket.on('guest:register', (data) => {
+      const { userId, username, displayName } = data;
+      
+      // Store guest info with timestamp for potential cleanup later
+      guestUsers.set(userId, {
+        username,
+        displayName: displayName || username,
+        createdAt: new Date()
+      });
+      
+      console.log(`Guest registered: ${username} (${userId})`);
+      
+      // Update active connection data
+      const connection = activeConnections.get(socket.id);
+      if (connection) {
+        connection.username = username;
+        connection.displayName = displayName || username;
+      }
+      
+      // Broadcast updated user list
+      broadcastUserList(io);
+    });
+    
     // Send user list to all clients
     broadcastUserList(io);
     

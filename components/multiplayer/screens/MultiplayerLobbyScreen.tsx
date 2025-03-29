@@ -14,8 +14,9 @@ import {
 import { useMultiplayer } from '../contexts/MultiplayerContext';
 import { useNavigation } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
+import { MultiplayerLobbyScreenProps } from '../types/ComponentProps';
 
-export const MultiplayerLobbyScreen: React.FC = () => {
+export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({ onBack, onGameCreated }) => {
   const navigation = useNavigation();
   const {
     currentUser,
@@ -51,7 +52,10 @@ export const MultiplayerLobbyScreen: React.FC = () => {
     setErrorMessage(null);
     setIsLoading(true);
     try {
-      await createGame(false);
+      const gameId = await createGame(false) as string;
+      if (onGameCreated) {
+        onGameCreated(gameId);
+      }
       // Navigation will happen via context when game is created
     } catch (error) {
       console.error('Create game error:', error);
@@ -65,7 +69,10 @@ export const MultiplayerLobbyScreen: React.FC = () => {
     setErrorMessage(null);
     setIsLoading(true);
     try {
-      await createGame(true);
+      const gameId = await createGame(true) as string;
+      if (onGameCreated) {
+        onGameCreated(gameId);
+      }
       // Navigation will happen via context when game is created
     } catch (error) {
       console.error('Create private game error:', error);
@@ -262,8 +269,9 @@ export const MultiplayerLobbyScreen: React.FC = () => {
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => {
-            // This should exit the entire multiplayer flow and go back to the main menu
-            if (navigation && navigation.goBack) {
+            if (onBack) {
+              onBack();
+            } else if (navigation && navigation.goBack) {
               navigation.goBack();
             }
           }}

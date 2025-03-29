@@ -1,124 +1,137 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { View, Button, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useMultiplayer } from '../contexts/MultiplayerContext';
 import AuthScreen from '../screens/AuthScreen';
 import MultiplayerLobbyScreen from '../screens/MultiplayerLobbyScreen';
 import GameWaitingRoom from '../screens/GameWaitingRoom';
 import OnlineBattleScreen from '../screens/OnlineBattleScreen';
-import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
-
-type Screen = 'Auth' | 'Lobby' | 'WaitingRoom' | 'Battle';
 
 interface MultiplayerNavigatorProps {
-  initialScreen: Screen;
   onExit: () => void;
+  initialScreen?: string;
 }
 
-export const MultiplayerNavigator: React.FC<MultiplayerNavigatorProps> = ({ 
-  initialScreen,
-  onExit
-}) => {
+/**
+ * This component handles navigation flow between different multiplayer screens
+ * based on the current state of the game and authentication.
+ */
+const MultiplayerNavigator: React.FC<MultiplayerNavigatorProps> = ({ onExit, initialScreen = 'Auth' }) => {
   const { isAuthenticated, isConnected, activeGame } = useMultiplayer();
-  const [currentScreen, setCurrentScreen] = useState<Screen>(initialScreen);
+  const [currentScreen, setCurrentScreen] = useState<string>(initialScreen);
+  const [forceNavigateTo, setForceNavigateTo] = useState<string | null>(null);
+  const [isPendingNavigation, setIsPendingNavigation] = useState(false);
 
-  // Handle automatic navigation based on context state
+  // Determine what screen to show based on current state
   useEffect(() => {
-    console.log('Navigator state update:', { isAuthenticated, isConnected, activeGame, currentScreen });
-    
-    if (!isAuthenticated) {
-      console.log('Navigator: Not authenticated, setting screen to Auth');
-      setCurrentScreen('Auth');
+    // If we have a forced navigation target, prioritize it
+    if (forceNavigateTo) {
+      console.log(`Navigator: Forced navigation to ${forceNavigateTo}`);
+      setCurrentScreen(forceNavigateTo);
+      setForceNavigateTo(null);
       return;
     }
-    
-    // Critical fix: If authenticated, immediately check if we need to go to lobby
-    if (isAuthenticated && isConnected) {
-      // Only navigate if we're not already in the right screen to prevent loops
-      if (currentScreen === 'Auth') {
-        console.log('Navigator: Successfully authenticated, moving to Lobby');
-        setCurrentScreen('Lobby');
-        return;
-      }
-    }
-    
-    // If authenticated but not connected, show loading screen and wait but don't change screen
-    if (!isConnected && isAuthenticated) {
-      console.log('Navigator: Authenticated but waiting for connection');
-      // Don't change currentScreen - this allows the loading screen to appear
-      // but preserves our current screen state
-      return;
-    }
-    
+
+    const newState = {
+      isAuthenticated,
+      isConnected,
+      activeGame,
+      currentScreen
+    };
+    console.log('Navigator state update:', newState);
+
+    // First check for existing game
     if (activeGame) {
       if (activeGame.status === 'waiting') {
-        console.log('Navigator: Game waiting, setting screen to WaitingRoom');
-        setCurrentScreen('WaitingRoom');
-      } else if (['active', 'completed', 'abandoned'].includes(activeGame.status)) {
-        console.log('Navigator: Game active/completed/abandoned, setting screen to Battle');
-        setCurrentScreen('Battle');
+        setCurrentScreen('Waiting');
+      } else if (['active', 'completed'].includes(activeGame.status)) {
+        setCurrentScreen('Game');
+      }
+      return;
+    }
+
+    // If no game, check auth state
+    if (isAuthenticated && isConnected) {
+      // Only navigate to lobby if we're currently on Auth screen
+      // This prevents unnecessary redirects once we're in deeper screens
+      if (currentScreen === 'Auth') {
+        setCurrentScreen('Lobby');
+      }
+    } else {
+      // Only return to auth if we're not already in a game
+      if (!activeGame && currentScreen !== 'Auth') {
+        setCurrentScreen('Auth');
       }
     }
-    // Existing fallback for setting lobby screen is handled above
-  }, [isAuthenticated, isConnected, activeGame, currentScreen]);
+  }, [isAuthenticated, isConnected, activeGame, currentScreen, forceNavigateTo]);
 
-  // Handle screen transitions - force move to lobby after auth success 
+  // Handle forced navigation after authentication success
   const handleAuthSuccess = () => {
-    // First, set the screen state
-    setCurrentScreen('Lobby');
-    
-    // Force a state refresh in parent components if needed
     console.log('Navigator: Forced navigation to Lobby after auth success');
+    setIsPendingNavigation(true);
     
-    // This additional callback ensures navigation works even if context updates are delayed
-    // Store the current state in variables to avoid hook rule violations in the timeout
-    const currentAuthStatus = isAuthenticated;
-    const currentConnectedStatus = isConnected;
-    
+    // Force navigation to lobby with a slight delay to allow state to update
     setTimeout(() => {
-      // Use the stored variables instead of accessing hooks in the callback
-      if (currentAuthStatus && currentConnectedStatus) {
-        setCurrentScreen('Lobby');
-        console.log('Navigator: Double-checking lobby navigation');
-      }
-    }, 1000);
+      setForceNavigateTo('Lobby');
+      setIsPendingNavigation(false);
+    }, 500);
   };
 
-  // Render current screen
+  // Handle navigation from lobby to game
+  const handleGameCreated = (gameId: string) => {
+    console.log(`Navigator: Game created with ID: ${gameId}`);
+    // Force navigation will be triggered by activeGame state change
+  };
+
+  // Handle back button from lobby
+  const handleBackFromMultiplayer = () => {
+    console.log('Navigator: Back from multiplayer');
+    onExit();
+  };
+
+  // Render appropriate screen
   const renderScreen = () => {
-    // Show loading if connecting (but only after authentication)
-    if (!isConnected && currentScreen !== 'Auth') {
+    if (isPendingNavigation) {
       return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2196F3" />
-          <Text style={styles.loadingText}>Connecting to server...</Text>
-          <Text style={styles.helpText}>
-            If this takes too long, please check your network connection and ensure the server is running.
-          </Text>
+        <View style={styles.container}>
+          <ActivityIndicator size="large" color="#0000ff" />
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
       );
     }
-    
+
     switch (currentScreen) {
       case 'Auth':
-        return (
-          <AuthScreen 
-            onAuthSuccess={handleAuthSuccess} 
-            onBack={onExit} 
-          />
-        );
+        return <AuthScreen onAuthSuccess={handleAuthSuccess} onBack={onExit} />;
+      
       case 'Lobby':
         return (
-          <MultiplayerLobbyScreen />
+          <MultiplayerLobbyScreen 
+            onBack={handleBackFromMultiplayer}
+            onGameCreated={handleGameCreated}
+          />
         );
-      case 'WaitingRoom':
+      
+      case 'Waiting':
         return (
-          <GameWaitingRoom />
+          <GameWaitingRoom 
+            onBack={() => setCurrentScreen('Lobby')}
+          />
         );
-      case 'Battle':
+      
+      case 'Game':
         return (
-          <OnlineBattleScreen />
+          <OnlineBattleScreen 
+            onBack={() => setCurrentScreen('Lobby')}
+          />
         );
+      
       default:
-        return null;
+        return (
+          <View style={styles.container}>
+            <Text>Something went wrong!</Text>
+            <Button title="Go Back" onPress={onExit} />
+          </View>
+        );
     }
   };
 
@@ -126,24 +139,16 @@ export const MultiplayerNavigator: React.FC<MultiplayerNavigatorProps> = ({
 };
 
 const styles = StyleSheet.create({
-  loadingContainer: {
+  container: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+    padding: 20,
   },
   loadingText: {
     marginTop: 20,
-    fontSize: 18,
-    color: '#555',
-  },
-  helpText: {
-    marginTop: 10,
-    fontSize: 14,
-    color: '#777',
-    textAlign: 'center',
-    paddingHorizontal: 40,
-  },
+    fontSize: 16,
+  }
 });
 
 export default MultiplayerNavigator;

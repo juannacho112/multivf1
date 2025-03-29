@@ -12,8 +12,9 @@ import {
 import { useMultiplayer } from '../contexts/MultiplayerContext';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
+import { GameWaitingRoomProps } from '../types/ComponentProps';
 
-export const GameWaitingRoom: React.FC = () => {
+export const GameWaitingRoom: React.FC<GameWaitingRoomProps> = ({ onBack }) => {
   const navigation = useNavigation();
   const {
     activeGame,
@@ -25,9 +26,14 @@ export const GameWaitingRoom: React.FC = () => {
   
   useEffect(() => {
     if (!activeGame) {
-      navigation.goBack();
+      // Use onBack prop if provided, otherwise use navigation
+      if (onBack) {
+        onBack();
+      } else if (navigation && navigation.goBack) {
+        navigation.goBack();
+      }
     }
-  }, [activeGame, navigation]);
+  }, [activeGame, navigation, onBack]);
   
   // Get the current player
   const currentPlayer = activeGame?.players.find(
@@ -57,7 +63,11 @@ export const GameWaitingRoom: React.FC = () => {
           style: 'destructive',
           onPress: () => {
             leaveGame();
-            navigation.goBack();
+            if (onBack) {
+              onBack();
+            } else if (navigation && navigation.goBack) {
+              navigation.goBack();
+            }
           }
         }
       ]

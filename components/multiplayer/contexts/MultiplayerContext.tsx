@@ -197,14 +197,21 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
         setCurrentUser(guestUser);
         setIsAuthenticated(true);
         
-        // Force a log to see state after update
+        // Force state debugging with a timeout for reliable logging
         setTimeout(() => {
           console.log('MultiplayerContext: State after guest setup:', {
             isConnected: true,
             isAuthenticated: true,
             user: guestUser
           });
-        }, 100);
+        }, 250);
+
+        // Important: Notify the server about this guest user
+        socketService.sendToServer('guest:register', {
+          userId: guestId,
+          username: guestUsername,
+          displayName: guestUsername
+        });
       }
     };
     

@@ -12,9 +12,10 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import { useMultiplayer } from '../contexts/MultiplayerContext';
+import { OnlineBattleScreenProps } from '../types/ComponentProps';
 
-// Simplified placeholder component that displays basic game information
-export const OnlineBattleScreen: React.FC = () => {
+// Component that displays the online battle screen
+export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }) => {
   const navigation = useNavigation();
   const {
     currentUser,
@@ -30,9 +31,13 @@ export const OnlineBattleScreen: React.FC = () => {
 
   useEffect(() => {
     if (!activeGame) {
-      navigation.goBack();
+      if (onBack) {
+        onBack();
+      } else if (navigation && navigation.goBack) {
+        navigation.goBack();
+      }
     }
-  }, [activeGame, navigation]);
+  }, [activeGame, navigation, onBack]);
 
   // If no active game, show loading
   if (!activeGame) {
@@ -66,7 +71,11 @@ export const OnlineBattleScreen: React.FC = () => {
           style: 'destructive',
           onPress: () => {
             leaveGame();
-            navigation.goBack();
+            if (onBack) {
+              onBack();
+            } else if (navigation && navigation.goBack) {
+              navigation.goBack();
+            }
           },
         },
       ]
@@ -136,7 +145,11 @@ export const OnlineBattleScreen: React.FC = () => {
             style={styles.returnButton}
             onPress={() => {
               leaveGame();
-              navigation.goBack();
+              if (onBack) {
+                onBack();
+              } else if (navigation && navigation.goBack) {
+                navigation.goBack();
+              }
             }}
           >
             <Text style={styles.returnButtonText}>Return to Lobby</Text>
