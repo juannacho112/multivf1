@@ -211,8 +211,8 @@ class SocketService extends SimpleEventEmitter {
     return new Promise<boolean>((resolve) => {
       console.log(`Connecting to ${serverUrl} with ${auth.isGuest ? 'guest' : 'token'} auth`);
       
-      // Initialize socket with improved settings that match the backend
-      this.socket = io(serverUrl, {
+      // Initialize socket with improved settings optimized for web and React Native
+      const socketOptions = {
         auth,
         reconnection: true,
         reconnectionAttempts: 5,
@@ -220,19 +220,33 @@ class SocketService extends SimpleEventEmitter {
         reconnectionDelayMax: 5000,
         timeout: 20000,
         
-        // Critical - Set up proper transports
+        // Critical - Set up proper transports for web compatibility
         // Start with polling only, then upgrade to websocket if available
         transports: ['polling'],
         upgrade: true,
         
         // Important additional settings
         path: '/socket.io/',
-        
-        // Add compatible request headers that work in browsers
-        extraHeaders: {
+      };
+      
+      // Special handling for web browsers: Don't use extraHeaders which can cause issues
+      // with CORS and preflight requests in some browsers
+      if (Platform.OS !== 'web') {
+        // For React Native, we can add extra headers
+        (socketOptions as any).extraHeaders = {
           "Accept": "*/*"
-        }
-      });
+        };
+      }
+      
+      // Create the socket connection
+      this.socket = io(serverUrl, socketOptions);
+      
+      // Debug socket IO version and options
+      console.log(`Using Socket.IO with options: ${JSON.stringify({
+        reconnection: socketOptions.reconnection,
+        transports: socketOptions.transports,
+        upgrade: socketOptions.upgrade
+      })}`);
       
       console.log('Socket configured with initial polling transport with upgrade capability');
       

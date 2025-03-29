@@ -49,16 +49,18 @@ const MultiplayerNavigator: React.FC<MultiplayerNavigatorProps> = ({ onExit, ini
       return;
     }
 
-    // If no game, check auth state
-    if (isAuthenticated && isConnected) {
-      // Only navigate to lobby if we're currently on Auth screen
-      // This prevents unnecessary redirects once we're in deeper screens
+    // If no game, check auth state - IMPORTANT: connection issues are handled by the Lobby screen
+    if (isAuthenticated) {
+      // If authenticated, always stay in lobby (even if not connected)
+      // The lobby screen will handle showing the disconnected state
       if (currentScreen === 'Auth') {
+        console.log('Navigator: User is authenticated, proceeding to Lobby screen');
         setCurrentScreen('Lobby');
       }
     } else {
-      // Only return to auth if we're not already in a game
-      if (!activeGame && currentScreen !== 'Auth') {
+      // Only return to auth if not authenticated
+      if (currentScreen !== 'Auth') {
+        console.log('Navigator: User is not authenticated, returning to Auth screen');
         setCurrentScreen('Auth');
       }
     }

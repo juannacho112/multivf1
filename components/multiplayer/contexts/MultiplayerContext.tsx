@@ -482,14 +482,33 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
         await AsyncStorage.setItem('authToken', data.token);
         await AsyncStorage.setItem('userData', JSON.stringify(data.user));
         
-        // Update state
+        // Update state immediately
         setIsAuthenticated(true);
         setCurrentUser(data.user);
         setIsGuest(false);
         
-        // Connect to socket
-        await socketService.connect(false); // Connect with token, not as guest
+        // Disconnect any existing connection first
+        socketService.disconnect();
         
+        // Force a small delay before connection to ensure state is updated
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Connect to socket with retries
+        let connectionSuccess = false;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          console.log(`Login: Socket connection attempt ${attempt}/3`);
+          connectionSuccess = await socketService.connect(false); // Connect with token, not as guest
+          
+          if (connectionSuccess) {
+            console.log('Login: Socket connection successful');
+            break;
+          } else {
+            console.warn(`Login: Socket connection attempt ${attempt} failed, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 500)); // Wait before retry
+          }
+        }
+        
+        // Return successful even if socket failed - we'll handle reconnection in the components
         return true;
       } else {
         console.error('Login failed:', data.message);
