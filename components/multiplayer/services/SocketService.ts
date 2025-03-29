@@ -6,8 +6,14 @@ import { EventEmitter } from 'events';
 // @ts-ignore - Handle missing type declarations
 import { Platform } from 'react-native';
 
-// Production URL - Server should be running at this domain
-const PRODUCTION_URL = 'https://vf.studioboost.pro'; 
+// Production URL - Server should be running at this domain using HTTP (not HTTPS)
+const PRODUCTION_URL = 'http://vf.studioboost.pro';
+// Add alternate URLs to try if main URL fails - make sure to try both with and without explicit port
+const ALTERNATE_URLS = [
+  'http://vf.studioboost.pro:3000',
+  'http://vf.studioboost.pro:80',
+  'https://vf.studioboost.pro', // Try HTTPS as fallback even though it's less preferred for Socket.IO
+];
 
 // Fallback development URLs in priority order
 const DEV_URLS = [
@@ -164,8 +170,21 @@ class SocketService extends SimpleEventEmitter {
         return true;
       }
       
-      // If production URL failed and we're in development, try fallback URLs
-      if (IS_DEV && this.serverUrl === PRODUCTION_URL) {
+      // Try alternate production URLs if main URL fails
+      if (this.serverUrl === PRODUCTION_URL || this.serverUrl === 'https://vf.studioboost.pro') {
+        for (const url of ALTERNATE_URLS) {
+          console.log(`Attempting to connect to alternate URL: ${url}`);
+          const fallbackConnected = await this.initializeSocket(url, auth);
+          if (fallbackConnected) {
+            this.serverUrl = url;
+            await this.saveServerUrl(url);
+            return true;
+          }
+        }
+      }
+      
+      // Try development URLs as last resort
+      if (IS_DEV) {
         for (const url of DEV_URLS) {
           console.log(`Attempting to connect to fallback server: ${url}`);
           const fallbackConnected = await this.initializeSocket(url, auth);
@@ -200,13 +219,23 @@ class SocketService extends SimpleEventEmitter {
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
         timeout: 20000,
-        // Use both polling and websocket transport for better compatibility
-        transports: ['polling', 'websocket'],
+        
+        // Critical - Set up proper transports
+        // Start with polling only, then upgrade to websocket if available
+        transports: ['polling'],
         upgrade: true,
+        
+        // Important additional settings
         path: '/socket.io/',
+        
+        // Add request headers for CORS compatibility
+        extraHeaders: {
+          "User-Agent": "VeeFriendsClient/1.0",
+          "Accept": "*/*"
+        }
       });
       
-      console.log('Socket configured with both polling and WebSocket transport');
+      console.log('Socket configured with initial polling transport with upgrade capability');
       
       // Set up standard event listeners
       this.setupEventListeners();
@@ -300,6 +329,14 @@ class SocketService extends SimpleEventEmitter {
    */
   getServerUrl(): string {
     return this.serverUrl;
+  }
+
+  /**
+   * Get the socket instance - useful for advanced operations
+   * Note: Use with caution as this exposes the internal socket
+   */
+  getSocket(): Socket | null {
+    return this.socket;
   }
   
   /**

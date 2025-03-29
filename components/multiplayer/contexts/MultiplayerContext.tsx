@@ -172,30 +172,40 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
     const handleConnected = () => {
       console.log('MultiplayerContext: Socket connected event received');
       
-      // Force state update to ensure UI responds
-      setTimeout(() => {
-        setIsConnected(true);
+      // Immediately update connected state
+      setIsConnected(true);
+      
+      // If connecting as guest, set authenticated state and create guest user object
+      if (isGuest) {
+        console.log('MultiplayerContext: Setting up guest user after connection');
         
-        // If connecting as guest, set authenticated state and create guest user object
-        if (isGuest) {
-          console.log('MultiplayerContext: Setting up guest user after connection');
-          setIsAuthenticated(true);
-          
-          // Create a temporary guest user object
-          const guestUsername = `Guest_${Math.floor(1000 + Math.random() * 9000)}`;
-          const guestUser: User = {
-            id: `guest-${Math.random().toString(36).substr(2, 9)}`,
-            username: guestUsername,
-            displayName: guestUsername,
-            isGuest: true
-          };
-          
-          setCurrentUser(guestUser);
-          
-          // Force refresh of navigation by manually triggering state updates
-          console.log('MultiplayerContext: Setting authentication status');
-        }
-      }, 500); // Small delay to ensure events are processed properly
+        // Generate a random guest username
+        const guestNumber = Math.floor(1000 + Math.random() * 9000);
+        const guestUsername = `Guest_${guestNumber}`;
+        const guestId = `guest-${Math.random().toString(36).substring(2, 9)}`;
+        
+        const guestUser: User = {
+          id: guestId,
+          username: guestUsername,
+          displayName: guestUsername,
+          isGuest: true
+        };
+        
+        console.log('MultiplayerContext: Created guest user:', guestUser);
+        
+        // Set the user and authentication in state
+        setCurrentUser(guestUser);
+        setIsAuthenticated(true);
+        
+        // Force a log to see state after update
+        setTimeout(() => {
+          console.log('MultiplayerContext: State after guest setup:', {
+            isConnected: true,
+            isAuthenticated: true,
+            user: guestUser
+          });
+        }, 100);
+      }
     };
     
     const handleDisconnected = () => {
@@ -414,8 +424,19 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
    * Connect to the socket server
    */
   const connect = async (asGuest: boolean = false) => {
+    console.log(`MultiplayerContext: Connecting as ${asGuest ? 'guest' : 'authenticated user'}`);
     setIsGuest(asGuest);
-    return await socketService.connect(asGuest);
+    
+    // If we're connecting as a guest, immediately set that we're in guest mode
+    // This helps the socket event listeners know to create a guest user on connection
+    if (asGuest) {
+      console.log('MultiplayerContext: Setting guest mode before connection');
+    }
+    
+    // Connect and return result
+    const result = await socketService.connect(asGuest);
+    console.log(`MultiplayerContext: Connection result: ${result}`);
+    return result;
   };
   
   /**
@@ -435,8 +456,11 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
    */
   const login = async (username: string, password: string) => {
     try {
-      // This would be a fetch call to your auth endpoint
-      const response = await fetch('http://localhost:3000/api/auth/login', {
+      // Use the same server URL as the socket connection
+      const apiBaseUrl = socketService.getServerUrl();
+      console.log(`Login: Using API base URL ${apiBaseUrl}`);
+      
+      const response = await fetch(`${apiBaseUrl}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -475,11 +499,15 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
    */
   const register = async (username: string, email: string, password: string) => {
     try {
-      // This would be a fetch call to your auth endpoint
-      const response = await fetch('http://localhost:3000/api/auth/register', {
+      // Use the same server URL as the socket connection
+      const apiBaseUrl = socketService.getServerUrl();
+      console.log(`Register: Using API base URL ${apiBaseUrl}`);
+      
+      const response = await fetch(`${apiBaseUrl}/api/auth/register`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         },
         body: JSON.stringify({ username, email, password })
       });

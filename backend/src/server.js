@@ -37,33 +37,32 @@ const allowedOrigins = [
   'https://localhost:*'
 ];
 
-// Setup Socket.IO with simplified CORS and better connection settings
+// Setup Socket.IO with proper CORS for mobile compatibility
 const io = new Server(server, {
   cors: {
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps)
-      if (!origin) return callback(null, true);
-      
-      // Always allow for better compatibility
-      callback(null, true);
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    credentials: true,
+    origin: "*", // Most permissive setting for React Native compatibility
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: false, // Set to false for better mobile compatibility with wildcard origin
+    allowedHeaders: ["Content-Type", "Authorization", "User-Agent", "Accept"]
   },
-  // More reasonable connection settings
-  pingTimeout: 60000, // 1 minute timeout
-  pingInterval: 25000, // 25 second ping
-  connectTimeout: 60000, // 1 minute connect timeout
-  // Allow both polling and websockets for better compatibility
+  // Connection settings optimized for mobile clients
+  pingTimeout: 30000, // 30 second timeout (reduced for mobile)
+  pingInterval: 20000, // 20 second ping (slightly reduced)
+  connectTimeout: 45000, // 45 second connect timeout
+  
+  // Critical: Start with polling for compatibility, but allow upgrade
   transports: ['polling', 'websocket'],
-  // Better error handling and logging
+  
+  // Additional optimal settings
   allowEIO3: true, // Support both Socket.IO v2 and v3 clients
   maxHttpBufferSize: 1e6, // 1MB buffer
-  path: '/socket.io/', // Explicitly set path
-  // Additional settings
+  path: '/socket.io/', // Default path
   serveClient: false, // Don't serve client files
-  cookie: false, // Disable cookies for better mobile compatibility
+  cookie: false, // Disable cookies for React Native compatibility
 });
+
+// Debug log for server configuration
+console.log('Socket.IO server configured with optimized mobile settings');
 
 // Log socket server configuration with more details
 console.log('Socket.IO server configured with:', {
@@ -95,13 +94,32 @@ io.engine.on("connection", (socket) => {
   });
 });
 
-// Set up access control headers for express
+// Set up more comprehensive CORS headers for Express
 app.use((req, res, next) => {
+  // Set permissive CORS headers for all routes
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
-  res.header('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Authorization, my-custom-header');
-  res.header('Access-Control-Allow-Credentials', true);
+  res.header('Access-Control-Allow-Headers', 
+    'X-Requested-With, Content-Type, Authorization, User-Agent, Accept');
+  res.header('Access-Control-Allow-Credentials', 'false'); // Must be false with wildcard origin
+  
+  // Handle preflight OPTIONS requests properly
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
   next();
+});
+
+// Add a diagnostic route for CORS testing
+app.get('/cors-test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'CORS is properly configured',
+    headers: req.headers,
+    origin: req.headers.origin || 'No origin header',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Debug socket connections

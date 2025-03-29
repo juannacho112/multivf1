@@ -98,49 +98,29 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
         console.warn('AuthScreen: Could not clear cached server URL');
       }
       
-      // Extended retry logic for guest connection
+      // Direct connection attempt
       let connected = false;
-      let attempts = 0;
-      const maxAttempts = 5; // Increased max attempts
-      
-      while (!connected && attempts < maxAttempts) {
-        attempts++;
-        console.log(`AuthScreen: Guest connection attempt ${attempts}/${maxAttempts}`);
-        
-        try {
-          connected = await socketService.connect(true); // true = connect as guest
-          
-          if (connected) {
-            console.log('AuthScreen: Connection succeeded on attempt', attempts);
-            break;
-          } else {
-            console.log('AuthScreen: Connection returned false on attempt', attempts);
-          }
-        } catch (connectErr) {
-          console.error(`AuthScreen: Connection error on attempt ${attempts}:`, connectErr);
-        }
-        
-        if (!connected && attempts < maxAttempts) {
-          const waitTime = attempts * 1000; // Increasing backoff
-          setError(`Connection attempt ${attempts} failed. Retrying in ${waitTime/1000}s...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-        }
+      try {
+        connected = await socketService.connect(true); // true = connect as guest
+      } catch (connectErr) {
+        console.error(`AuthScreen: Connection error:`, connectErr);
       }
       
       console.log('AuthScreen: Guest connection result:', connected);
       
       if (connected) {
-        console.log('AuthScreen: Guest connection successful, proceeding to lobby');
+        console.log('AuthScreen: Guest connection successful');
         setError('Connection successful! Loading lobby...');
         
-        // Longer delay to ensure all socket events and state updates complete
+        // Simply proceed to lobby after successful connection
+        // The MultiplayerContext will handle the authentication state
         setTimeout(() => {
-          console.log('AuthScreen: Navigating to lobby after delay');
+          console.log('AuthScreen: Proceeding to lobby');
           onAuthSuccess();
-        }, 3500); // Further increased delay for more reliable navigation
+        }, 1000); // Short delay for any final setup
       } else {
-        console.error('AuthScreen: Failed to connect as guest after multiple attempts');
-        setError(`Failed to connect after ${maxAttempts} attempts. Please check your network and server status.`);
+        console.error('AuthScreen: Failed to connect as guest');
+        setError('Failed to connect. Please check your network and server status.');
         setLoading(false);
       }
     } catch (err: unknown) {
