@@ -68,10 +68,14 @@ export const MultiplayerNavigator: React.FC<MultiplayerNavigatorProps> = ({
     // Force a state refresh in parent components if needed
     console.log('Navigator: Forced navigation to Lobby after auth success');
     
-    // This additional callback ensures the navigation works even if context
-    // state updates are delayed
+    // This additional callback ensures navigation works even if context updates are delayed
+    // Store the current state in variables to avoid hook rule violations in the timeout
+    const currentAuthStatus = isAuthenticated;
+    const currentConnectedStatus = isConnected;
+    
     setTimeout(() => {
-      if (isAuthenticated && isConnected) {
+      // Use the stored variables instead of accessing hooks in the callback
+      if (currentAuthStatus && currentConnectedStatus) {
         setCurrentScreen('Lobby');
         console.log('Navigator: Double-checking lobby navigation');
       }

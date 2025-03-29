@@ -97,10 +97,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
       } catch (e) {
         console.warn('AuthScreen: Could not clear cached server URL');
       }
-
-      const { connect } = useMultiplayer();
       
-      // Directly connect using the socketService to bypass React hook rules
+      // Directly connect using the socketService - do NOT call React hooks here
       const connected = await socketService.connect(true);
       
       console.log('AuthScreen: Guest connection result:', connected);
