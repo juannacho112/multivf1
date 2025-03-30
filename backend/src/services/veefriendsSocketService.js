@@ -704,27 +704,46 @@ const processMatchmaking = async (io) => {
     console.log(`Matchmaking: Created game ${game._id} between ${player1.username} and ${player2.username}`);
     
     // CRITICAL: Delay game:created event slightly to ensure clients have processed matchmaking:matched events
-    setTimeout(() => {
-      console.log(`Emitting game:created event to room game:${game._id}`);
-      
-      // Notify both players the game is ready
-      io.to(`game:${game._id}`).emit('game:created', {
-        gameId: game._id,
-        gameCode: game.gameCode,
-        players: game.players
-      });
-      
-      console.log(`Game:created event emitted successfully`);
-      
-      // Force setting both players as ready to automatically start the game
-      console.log(`Auto-setting both players as ready to start game`);
-      game.players[0].isReady = true;
-      game.players[1].isReady = true;
-      game.save().then(() => {
-        // Start game directly
-        console.log(`Starting game ${game._id} automatically`);
-        startGame(io, game);
-      });
+    setTimeout(async () => { // Make the callback async to allow await inside
+      try {
+        console.log(`Emitting game:created event to room game:${game._id}`);
+        
+        // Notify both players the game is ready
+        io.to(`game:${game._id}`).emit('game:created', {
+          gameId: game._id,
+          gameCode: game.gameCode,
+          players: game.players
+        });
+        
+        console.log(`Game:created event emitted successfully`);
+        
+        // Force setting both players as ready with direct MongoDB update
+        console.log(`Auto-setting both players as ready to start game (using direct MongoDB update)`);
+        
+        // Use direct update to avoid Mongoose validation issues
+        await VeefriendsGame.updateOne(
+          { _id: game._id },
+          { 
+            $set: { 
+              'players.0.isReady': true,
+              'players.1.isReady': true
+            }
+          }
+        );
+        
+        // Fetch fresh game state after update
+        const updatedGame = await VeefriendsGame.findById(game._id);
+        
+        // Verify both players are marked ready before starting game
+        if (updatedGame && updatedGame.players[0].isReady && updatedGame.players[1].isReady) {
+          console.log(`Starting game ${game._id} automatically (both players verified ready)`);
+          await startGame(io, updatedGame);
+        } else {
+          console.error('Failed to mark players ready. Game will not start automatically.');
+        }
+      } catch (error) {
+        console.error('Error in delayed game start process:', error);
+      }
     }, 500); // 500ms delay
   } catch (error) {
     console.error('Error in matchmaking:', error);
@@ -737,84 +756,192 @@ const processMatchmaking = async (io) => {
 
 // Start a game
 const startGame = async (io, game) => {
-  // Import cards dynamically to avoid circular dependencies
-  const { generateRandomDeck, fullCardPool, getVeefriendsStarterDeck } = await import('../utils/cardUtils.js');
-  
-  // Initialize game state
-  game.status = 'active';
-  game.phase = 'draw';
-  game.roundNumber = 1;
-  game.potSize = 1;
-  game.currentChallenger = 'player1';
-  game.challengeAttribute = null;
-  game.deniedAttributes = [];
-  game.availableAttributes = ['skill', 'stamina', 'aura'];
-  game.cardsInPlay = { player1: null, player2: null };
-  
-  // Initialize player decks if not already set
-  for (let i = 0; i < game.players.length; i++) {
-    try {
-      if (!game.players[i].deck || game.players[i].deck.length === 0) {
-        // Generate a new deck
-        let newDeck;
-        try {
-          // Try to generate a random deck
-          const generatedDeck = generateRandomDeck(fullCardPool, 20);
-          // Ensure proper format
-          newDeck = ensureProperDeckFormat(generatedDeck);
-        } catch (genError) {
-          console.error(`Error generating random deck for player ${i+1}:`, genError);
-          // Fallback to starter deck
-          const starterDeck = getVeefriendsStarterDeck();
-          newDeck = ensureProperDeckFormat(starterDeck);
+  try {
+    // Keep a reference to the game ID before any operations
+    const gameId = game._id;
+    
+    // Import cards dynamically to avoid circular dependencies
+    const { generateRandomDeck, fullCardPool, getVeefriendsStarterDeck } = await import('../utils/cardUtils.js');
+    
+    console.log(`Starting game init for game ${gameId}`);
+    
+    // Initialize game state directly in database to avoid Mongoose validation issues
+    const basicGameState = {
+      status: 'active',
+      phase: 'draw',
+      roundNumber: 1,
+      potSize: 1,
+      currentChallenger: 'player1',
+      challengeAttribute: null,
+      deniedAttributes: [],
+      availableAttributes: ['skill', 'stamina', 'aura'],
+      cardsInPlay: { player1: null, player2: null }
+    };
+    
+    // Update the basic game state first
+    await VeefriendsGame.updateOne(
+      { _id: gameId },
+      { $set: basicGameState }
+    );
+    
+    // Initialize player decks if not already set
+    for (let i = 0; i < game.players.length; i++) {
+      try {
+        let playerDeck = [];
+        
+        // Check if player already has a deck
+        if (!game.players[i].deck || game.players[i].deck.length === 0) {
+          try {
+            // Try to generate a random deck
+            const generatedDeck = generateRandomDeck(fullCardPool, 20);
+            console.log(`Generated deck for player ${i+1} with ${generatedDeck.length} cards`);
+            
+            // Ensure proper format
+            playerDeck = ensureProperDeckFormat(generatedDeck);
+          } catch (genError) {
+            console.error(`Error generating random deck for player ${i+1}:`, genError);
+            
+            // Fallback to starter deck
+            try {
+              const starterDeck = getVeefriendsStarterDeck();
+              playerDeck = ensureProperDeckFormat(starterDeck);
+              console.log(`Using starter deck for player ${i+1}`);
+            } catch (fallbackError) {
+              console.error(`Error using fallback deck for player ${i+1}:`, fallbackError);
+              // Last resort - empty array
+              playerDeck = [];
+            }
+          }
+        } else {
+          playerDeck = Array.isArray(game.players[i].deck) ? game.players[i].deck : [];
+          console.log(`Player ${i+1} already has a deck with ${playerDeck.length} cards`);
         }
         
-        // Assign the properly formatted deck
-        game.players[i].deck = newDeck;
-        console.log(`Assigned new deck to player ${i+1} (${game.players[i].username}) with ${newDeck.length} cards`);
-      } else {
-        // Format existing deck
-        game.players[i].deck = ensureProperDeckFormat(game.players[i].deck);
-        console.log(`Reformatted existing deck for player ${i+1} (${game.players[i].username})`);
+        // Convert to plain JS objects to avoid any Mongoose document issues
+        const plainDeck = playerDeck.map(card => ({
+          id: String(card.id),
+          name: String(card.name),
+          skill: Number(card.skill),
+          stamina: Number(card.stamina),
+          aura: Number(card.aura),
+          baseTotal: Number(card.baseTotal || 0),
+          finalTotal: Number(card.finalTotal || 0),
+          rarity: String(card.rarity || 'common'),
+          character: String(card.character || ''),
+          type: String(card.type || 'standard'),
+          unlocked: Boolean(card.unlocked !== false)
+        }));
+        
+        // Reset player points and terrific token with MongoDB update
+        const playerUpdate = {
+          [`players.${i}.deck`]: plainDeck,
+          [`players.${i}.points.skill`]: 0,
+          [`players.${i}.points.stamina`]: 0,
+          [`players.${i}.points.aura`]: 0,
+          [`players.${i}.terrificTokenUsed`]: false
+        };
+        
+        // Update player with deck and reset stats
+        await VeefriendsGame.updateOne(
+          { _id: gameId },
+          { $set: playerUpdate }
+        );
+        
+        console.log(`Updated player ${i+1} deck and stats via MongoDB operation`);
+      } catch (error) {
+        console.error(`Error setting up player ${i+1}:`, error);
+        // Try basic update with empty deck as last resort
+        await VeefriendsGame.updateOne(
+          { _id: gameId },
+          { 
+            $set: {
+              [`players.${i}.deck`]: [],
+              [`players.${i}.points.skill`]: 0,
+              [`players.${i}.points.stamina`]: 0,
+              [`players.${i}.points.aura`]: 0,
+              [`players.${i}.terrificTokenUsed`]: false
+            }
+          }
+        );
       }
-    } catch (error) {
-      console.error(`Error setting up deck for player ${i+1}:`, error);
-      // Emergency fallback - empty array to prevent crashes
-      game.players[i].deck = [];
     }
     
-    // Reset player points and terrific token
-    game.players[i].points = { skill: 0, stamina: 0, aura: 0 };
-    game.players[i].terrificTokenUsed = false;
-  }
-  
-  await game.save();
-  
-  // Notify all players that game has started
-  io.to(`game:${game._id}`).emit('game:started', {
-    gameId: game._id,
-    gameState: game.getGameState()
-  });
-  
-  console.log(`Game started: ${game._id}`);
-  
-  // Start the first round by drawing cards
-  try {
-    await processGameAction(game, 'player1', 'drawCards');
-    await game.save();
-  } catch (error) {
-    console.error('Error processing first draw:', error);
-    // Send error notification to players
-    io.to(`game:${game._id}`).emit('error', { 
-      message: 'Failed to start game properly. Please try again.' 
+    // Reload game to get current state after all updates
+    game = await VeefriendsGame.findById(gameId);
+    if (!game) {
+      throw new Error('Game not found after updates');
+    }
+    
+    console.log(`Game ${gameId} prepared for start with all player decks`);
+    
+    // Notify all players that game has started
+    io.to(`game:${gameId}`).emit('game:started', {
+      gameId: gameId,
+      gameState: game.getGameState()
     });
+    
+    console.log(`Game started notification sent for ${gameId}`);
+    
+    // Start the first round by drawing cards
+    try {
+      const result = await processGameAction(game, 'player1', 'drawCards');
+      
+      // If game state changed, update directly in MongoDB
+      if (result.gameStateChanged) {
+        const updateFields = {
+          cardsInPlay: game.cardsInPlay,
+          phase: game.phase,
+          deniedAttributes: game.deniedAttributes,
+          availableAttributes: game.availableAttributes
+        };
+        
+        // Update the first player's deck (remove first card)
+        if (game.players[0].deck.length > 0) {
+          updateFields['players.0.deck'] = game.players[0].deck;
+        }
+        
+        // Update the second player's deck (remove first card)
+        if (game.players[1].deck.length > 0) {
+          updateFields['players.1.deck'] = game.players[1].deck;
+        }
+        
+        await VeefriendsGame.updateOne(
+          { _id: gameId },
+          { $set: updateFields }
+        );
+        
+        console.log(`Initial draw processed for game ${gameId}`);
+      }
+    } catch (error) {
+      console.error('Error processing first draw:', error);
+      
+      // Send error notification to players
+      io.to(`game:${gameId}`).emit('error', { 
+        message: 'Failed to start game properly. Please try again.' 
+      });
+    }
+    
+    // Reload game for the latest state
+    game = await VeefriendsGame.findById(gameId);
+    
+    // Send updated game state after drawing cards
+    io.to(`game:${gameId}`).emit('game:stateUpdate', {
+      gameId: gameId,
+      gameState: game.getGameState()
+    });
+    
+    console.log(`Game ${gameId} fully started and initialized`);
+  } catch (mainError) {
+    console.error('Critical error in startGame:', mainError);
+    // Attempt to notify players of failure
+    try {
+      io.to(`game:${game._id}`).emit('error', { 
+        message: 'Failed to properly initialize game. Please try again.' 
+      });
+    } catch (notifyError) {
+      console.error('Error notifying players:', notifyError);
+    }
   }
-  
-  // Send updated game state after drawing cards
-  io.to(`game:${game._id}`).emit('game:stateUpdate', {
-    gameId: game._id,
-    gameState: game.getGameState()
-  });
 };
 
 // Handle player disconnect during game

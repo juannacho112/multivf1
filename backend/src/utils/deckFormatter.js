@@ -1,209 +1,219 @@
 /**
- * Utility functions for ensuring proper deck format before saving to MongoDB
+ * Deck formatter utility for VeeFriends card game
+ * Handles multiple input formats (JSON strings, JavaScript object notation, arrays)
+ * and ensures proper structure for MongoDB storage
  */
 
 /**
- * Ensures a deck is in the proper format for MongoDB storage
- * This checks if the deck is a valid array of card objects
- * If it's a string, it will attempt to parse it and clean it
- * If it's already an array, it validates the structure
- * 
- * @param {Array|string} deck - The deck to validate and format
- * @returns {Array} - Properly formatted deck array
+ * Ensures proper formatting of deck data regardless of input format
+ * @param {string|Array|Object} deckData - Deck data that could be in various formats
+ * @returns {Array} Array of properly formatted card objects
  */
-export const ensureProperDeckFormat = (deck) => {
-  // If the deck is undefined or null, return empty array
-  if (!deck) {
-    return [];
-  }
-
-  // If the deck is already an array, validate it
-  if (Array.isArray(deck)) {
-    return validateDeckArray(deck);
-  }
-
-  // If the deck is a string, try to parse it
-  if (typeof deck === 'string') {
-    try {
-      // First, clean up the string
-      let cleanedString = deck.replace(/\n/g, '')
-                              .replace(/\s+/g, ' ')
-                              .trim();
-      
-      try {
-        // Try to parse it as JSON first
-        const parsedDeck = JSON.parse(cleanedString);
-        
-        // Make sure the parsed result is an array
-        if (Array.isArray(parsedDeck)) {
-          return validateDeckArray(parsedDeck);
-        } else {
-          console.error('Parsed deck is not an array');
-          return [];
-        }
-      } catch (jsonError) {
-        console.error('JSON parsing failed, trying to convert from JS object format:', jsonError);
-        
-        // The string may be in JavaScript object literal format instead of JSON
-        // Try to convert it to valid JSON format and parse again
-        try {
-          // Handle JavaScript object literal format with single quotes instead of double quotes
-          // 1. Replace single quotes with double quotes for string values
-          cleanedString = cleanedString.replace(/(\w+):/g, '"$1":') // Add quotes around property names
-                                      .replace(/'/g, '"'); // Replace single quotes with double quotes
-          
-          // 2. Parse the converted string
-          const parsedDeck = JSON.parse(cleanedString);
-          
-          // Make sure the parsed result is an array
-          if (Array.isArray(parsedDeck)) {
-            return validateDeckArray(parsedDeck);
-          }
-        } catch (jsObjectError) {
-          console.error('Failed to parse JavaScript object literal:', jsObjectError);
-          
-          // Last resort: try to parse it manually by extracting properties
-          try {
-            // Try a direct manual approach by evaluating the string as JavaScript
-            // Note: This is safe because we're using it locally in a controlled way
-            // and not exposing it to user input directly
-            console.log("Manually extracting card data from string...");
-            
-            // Method 1: Simple function wrapping approach
-            try {
-              // First, ensure it's a proper JavaScript array
-              const jsArray = `(function() { return ${deck}; })()`;
-              const extractedCards = eval(jsArray);
-              
-              if (Array.isArray(extractedCards) && extractedCards.length > 0) {
-                console.log(`Successfully extracted ${extractedCards.length} cards via eval`);
-                return validateDeckArray(extractedCards);
-              }
-            } catch (evalError) {
-              console.log("Eval extraction failed:", evalError);
-            }
-            
-            // Method 2: Extract card objects based on patterns in the string as fallback
-            console.log("Trying regex pattern matching as fallback...");
-            
-            // More comprehensive regex approach
-            const cardRegex = /{\s*id:\s*['"]([^'"]+)['"]\s*,\s*name:\s*['"]([^'"]+)['"]\s*,\s*skill:\s*(\d+)\s*,\s*stamina:\s*(\d+)\s*,\s*aura:\s*(\d+)\s*,\s*baseTotal:\s*(\d+)\s*,\s*finalTotal:\s*(\d+)\s*,\s*rarity:\s*['"]([^'"]+)['"]\s*,\s*character:\s*['"]([^'"]+)['"]\s*,\s*type:\s*['"]([^'"]+)['"]\s*,\s*unlocked:\s*(true|false)\s*}/g;
-            
-            const cards = [];
-            let match;
-            while ((match = cardRegex.exec(deck)) !== null) {
-              cards.push({
-                id: match[1],
-                name: match[2],
-                skill: parseInt(match[3], 10),
-                stamina: parseInt(match[4], 10),
-                aura: parseInt(match[5], 10),
-                baseTotal: parseInt(match[6], 10),
-                finalTotal: parseInt(match[7], 10),
-                rarity: match[8],
-                character: match[9],
-                type: match[10],
-                unlocked: match[11] === 'true'
-              });
-            }
-            
-            // Last resort method: Direct string parsing by looking for card objects
-            if (cards.length === 0) {
-              console.log("Trying more direct string parsing...");
-              try {
-                // Find each card object by looking for patterns
-                const regex = /{([^{}]*)}/g;
-                let objectMatch;
-                
-                while ((objectMatch = regex.exec(deck)) !== null) {
-                  const cardStr = objectMatch[0];
-                  try {
-                    // Process this individual card string into a proper JSON object
-                    const cleanCardStr = cardStr
-                      .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Add quotes to property names
-                      .replace(/'/g, '"'); // Convert single quotes to double quotes
-                    
-                    const cardObj = JSON.parse(cleanCardStr);
-                    if (cardObj && cardObj.id && cardObj.name && 
-                        typeof cardObj.skill === 'number' && 
-                        typeof cardObj.stamina === 'number' && 
-                        typeof cardObj.aura === 'number') {
-                      cards.push(cardObj);
-                    }
-                  } catch (cardParseErr) {
-                    console.log(`Failed to parse card: ${cardStr.substring(0, 50)}...`);
-                  }
-                }
-              } catch (directParseError) {
-                console.log("Direct string parsing failed:", directParseError);
-              }
-            }
-            
-            if (cards.length > 0) {
-              console.log(`Manually extracted ${cards.length} cards from string`);
-              return validateDeckArray(cards);
-            }
-          } catch (manualError) {
-            console.error('Failed manual extraction:', manualError);
-          }
-        }
-      }
-      
-      // If all parsing attempts fail, return empty array
-      return [];
-    } catch (error) {
-      console.error('Error processing deck string:', error);
-      return [];
-    }
+export const ensureProperDeckFormat = (deckData) => {
+  // If already an array of objects, just validate and return
+  if (Array.isArray(deckData) && deckData.length > 0 && typeof deckData[0] === 'object') {
+    return deckData.map(formatCard);
   }
   
-  // If the deck is neither an array nor a string, return empty array
-  console.error('Deck is neither an array nor a string');
+  // Handle string input (could be JSON or JS object notation)
+  if (typeof deckData === 'string') {
+    return parseStringDeckData(deckData);
+  }
+  
+  // Return empty array for invalid input
+  console.warn('Invalid deck data format', typeof deckData);
   return [];
 };
 
 /**
- * Validates that the deck array contains properly structured card objects
- * If any card is invalid, it will be removed from the deck
- * 
- * @param {Array} deckArray - The deck array to validate
- * @returns {Array} - Validated deck array
+ * Tries to parse string deck data that could be in various formats
+ * @param {string} deckString - String representation of deck data
+ * @returns {Array} Array of card objects
  */
-const validateDeckArray = (deckArray) => {
-  if (!Array.isArray(deckArray)) {
+function parseStringDeckData(deckString) {
+  if (!deckString || typeof deckString !== 'string') {
     return [];
   }
   
-  // Filter out invalid cards
-  return deckArray.filter(card => {
-    // Card must be an object
-    if (!card || typeof card !== 'object') {
-      return false;
+  try {
+    // Try standard JSON parsing first
+    const cleanedString = deckString.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
+    try {
+      const jsonData = JSON.parse(cleanedString);
+      return Array.isArray(jsonData) ? jsonData.map(formatCard) : [];
+    } catch (jsonError) {
+      console.log('JSON parsing failed, trying to convert from JS object format:', jsonError.message);
+      
+      // If JSON parsing fails, the string might be using JavaScript object notation
+      // This is a simple attempt to handle JavaScript object notation with single quotes
+      // Convert from JS notation to valid JSON
+      const jsonReady = cleanedString
+        // Replace single quotes with double quotes for property names
+        .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3')
+        // Replace single quotes with double quotes for string values
+        .replace(/:\s*'([^']*)'/g, ': "$1"')
+        // Fix properly escaped single quotes in strings
+        .replace(/\\'/g, "'");
+      
+      try {
+        const parsedData = JSON.parse(jsonReady);
+        return Array.isArray(parsedData) ? parsedData.map(formatCard) : [];
+      } catch (jsError) {
+        // Last resort: evaluate as JavaScript with safety precautions
+        console.log('JSON conversion failed, attempting JavaScript evaluation:', jsError.message);
+        
+        // SAFETY: Only try to evaluate if string looks like an array of objects
+        if (!/^\s*\[.*\]\s*$/.test(cleanedString)) {
+          console.error('Unsafe string format, aborting evaluation');
+          return [];
+        }
+        
+        // A more permissive approach for JavaScript object notation
+        try {
+          // Create safe evaluation context
+          const evalString = `(${cleanedString})`;
+          const result = new Function('return ' + evalString)();
+          
+          if (Array.isArray(result)) {
+            return result.map(formatCard);
+          }
+          return [];
+        } catch (evalError) {
+          console.error('JavaScript evaluation failed:', evalError.message);
+          
+          // One last attempt: manual parsing for simple object format
+          // This handles cases like [{id: 'abc', ...}, {id: 'def', ...}]
+          try {
+            return parseManual(cleanedString);
+          } catch (manualError) {
+            console.error('Manual parsing failed:', manualError.message);
+            return [];
+          }
+        }
+      }
     }
-    
-    // Card must have required properties
-    if (!card.id || !card.name || 
-        typeof card.skill !== 'number' || 
-        typeof card.stamina !== 'number' || 
-        typeof card.aura !== 'number') {
-      return false;
+  } catch (error) {
+    console.error('Error parsing deck string:', error.message);
+    return [];
+  }
+}
+
+/**
+ * A very simple manual parser for array of objects notation
+ * This is a last resort for malformed strings
+ */
+function parseManual(str) {
+  const cards = [];
+  let currentCard = {};
+  let inArray = false;
+  let inObject = false;
+  let currentProperty = '';
+  let currentValue = '';
+  
+  // Super simplified parsing - just extract what looks like valid cards
+  const matches = str.matchAll(/\{\s*id\s*:\s*['"]([^'"]+)['"]/g);
+  
+  for (const match of matches) {
+    try {
+      const cardStartIndex = match.index;
+      const cardEndIndex = str.indexOf('}', cardStartIndex);
+      
+      if (cardEndIndex > cardStartIndex) {
+        const cardString = str.substring(cardStartIndex, cardEndIndex + 1);
+        
+        // Extract key values using regex
+        const id = (cardString.match(/id\s*:\s*['"]([^'"]+)['"]/)?.[1]) || generateId();
+        const name = (cardString.match(/name\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'Unknown Card';
+        const skill = parseInt((cardString.match(/skill\s*:\s*(\d+)/)?.[1]) || '10');
+        const stamina = parseInt((cardString.match(/stamina\s*:\s*(\d+)/)?.[1]) || '10');
+        const aura = parseInt((cardString.match(/aura\s*:\s*(\d+)/)?.[1]) || '10');
+        const rarity = (cardString.match(/rarity\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'common';
+        const character = (cardString.match(/character\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'Unknown';
+        const type = (cardString.match(/type\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'standard';
+        
+        const baseTotal = skill + stamina + aura;
+        const finalTotal = baseTotal;
+        
+        cards.push({
+          id,
+          name,
+          skill,
+          stamina, 
+          aura,
+          baseTotal,
+          finalTotal,
+          rarity,
+          character,
+          type,
+          unlocked: true
+        });
+      }
+    } catch (error) {
+      console.error('Error parsing individual card:', error);
+      // Skip this card and continue
     }
-    
-    return true;
-  }).map(card => {
-    // Ensure all required properties have correct types
-    return {
-      id: String(card.id),
-      name: String(card.name),
-      skill: Number(card.skill),
-      stamina: Number(card.stamina),
-      aura: Number(card.aura),
-      baseTotal: Number(card.baseTotal || (card.skill + card.stamina + card.aura)),
-      finalTotal: Number(card.finalTotal || card.baseTotal || (card.skill + card.stamina + card.aura)),
-      rarity: String(card.rarity || 'common'),
-      character: String(card.character || card.name),
-      type: String(card.type || 'standard'),
-      unlocked: Boolean(card.unlocked !== false)
-    };
-  });
-};
+  }
+  
+  return cards;
+}
+
+/**
+ * Formats a card object to ensure all required fields are present
+ */
+function formatCard(card) {
+  if (!card || typeof card !== 'object') {
+    return createDefaultCard();
+  }
+  
+  // Calculate totals if needed
+  const skill = typeof card.skill === 'number' ? card.skill : parseInt(card.skill) || 10;
+  const stamina = typeof card.stamina === 'number' ? card.stamina : parseInt(card.stamina) || 10;
+  const aura = typeof card.aura === 'number' ? card.aura : parseInt(card.aura) || 10;
+  const baseTotal = card.baseTotal || (skill + stamina + aura);
+  const finalTotal = card.finalTotal || baseTotal;
+  
+  return {
+    id: String(card.id || generateId()),
+    name: String(card.name || 'Unknown Card'),
+    skill: skill,
+    stamina: stamina,
+    aura: aura,
+    baseTotal: baseTotal,
+    finalTotal: finalTotal,
+    rarity: String(card.rarity || 'common'),
+    character: String(card.character || 'Unknown'),
+    type: String(card.type || 'standard'),
+    unlocked: Boolean(card.unlocked !== false)
+  };
+}
+
+/**
+ * Creates a default card when data is missing
+ */
+function createDefaultCard() {
+  const skill = 10;
+  const stamina = 10;
+  const aura = 10;
+  
+  return {
+    id: generateId(),
+    name: 'Default Card',
+    skill,
+    stamina,
+    aura,
+    baseTotal: skill + stamina + aura,
+    finalTotal: skill + stamina + aura,
+    rarity: 'common',
+    character: 'Unknown',
+    type: 'standard',
+    unlocked: true
+  };
+}
+
+/**
+ * Generates a unique ID for cards
+ */
+function generateId() {
+  return Math.random().toString(36).substring(2, 15) + 
+         Math.random().toString(36).substring(2, 15);
+}
