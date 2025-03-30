@@ -41,16 +41,16 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthSuccess, onBack }) => {
     }
   }, [isAuthenticated, onAuthSuccess]);
   
-  // Additional useEffect for guest login to handle that special case
+  // IMMEDIATE guest navigation - don't wait for isAuthenticated
   useEffect(() => {
-    if (attemptedGuestLogin && isAuthenticated) {
-      console.log('AuthScreen: Detected successful guest authentication. Proceeding to lobby.');
-      // Navigate to lobby with a small delay to ensure state propagation
+    if (attemptedGuestLogin && loading) {
+      console.log('AuthScreen: Guest login attempt detected, forcing navigation to lobby');
+      // Force immediate navigation for guest logins since they may not trigger isAuthenticated in time
       setTimeout(() => {
         onAuthSuccess();
-      }, 300);
+      }, 500);
     }
-  }, [attemptedGuestLogin, isAuthenticated, onAuthSuccess]);
+  }, [attemptedGuestLogin, loading, onAuthSuccess]);
 
   const handleSubmit = async () => {
     setError('');

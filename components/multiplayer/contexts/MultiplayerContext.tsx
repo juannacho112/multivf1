@@ -196,19 +196,16 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
         
         console.log('MultiplayerContext: Created guest user:', guestUser);
         
-        // Set the user and authentication in state in a safe way for React's state batching
+        // CRITICAL FIX: Set authenticated and user state IMMEDIATELY
         setCurrentUser(guestUser);
         setIsAuthenticated(true);
         
-        // Force state debugging with a timeout for reliable logging
+        // Force immediate state update and navigation trigger
         setTimeout(() => {
-          console.log('MultiplayerContext: State after guest setup:', {
-            isConnected: true,
-            isAuthenticated: true,
-            user: guestUser
-          });
-        }, 250);
-
+          console.log('MultiplayerContext: Force update of state after guest setup');
+          setIsConnected(true); // Force rerender
+        }, 100);
+        
         // Important: Notify the server about this guest user
         socketService.sendToServer('guest:register', {
           userId: guestId,
@@ -253,12 +250,60 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
     };
     
     const handleMatchmakingMatched = (data: { gameId: string, opponent: User }) => {
+      console.log('MultiplayerContext: Matchmaking matched event received', data);
+      
+      // Clear matchmaking status
       setMatchmaking({
         inQueue: false,
         timeInQueue: 0
       });
       
-      // The game state will be updated through the game:created event
+      // Force connection status to true to update UI properly
+      setIsConnected(true);
+
+      // Pre-create a minimal game state immediately to help with navigation flow
+      // This ensures the UI can transition properly without waiting for game:created
+      setActiveGame({
+        gameId: data.gameId,
+        status: 'waiting' as const,
+        phase: 'draw' as const,
+        players: [
+          {
+            userId: currentUser?.id || '',
+            username: currentUser?.username || '',
+            displayName: currentUser?.displayName || currentUser?.username || '',
+            isReady: false,
+            isGuest: !!currentUser?.isGuest,
+            points: { skill: 0, stamina: 0, aura: 0 },
+            terrificTokenUsed: false,
+            deck: []
+          },
+          {
+            userId: data.opponent.id,
+            username: data.opponent.username,
+            displayName: data.opponent.displayName || data.opponent.username,
+            isReady: false,
+            isGuest: !!data.opponent.isGuest,
+            points: { skill: 0, stamina: 0, aura: 0 },
+            terrificTokenUsed: false,
+            deck: []
+          }
+        ],
+        currentChallenger: 'player1' as const,
+        challengeAttribute: null,
+        deniedAttributes: [],
+        availableAttributes: ['skill', 'stamina', 'aura'],
+        cardsInPlay: {
+          player1: null,
+          player2: null
+        },
+        burnPile: [],
+        roundNumber: 1,
+        potSize: 1,
+        winner: null
+      });
+      
+      // The full game state will be updated through the game:created event
     };
     
     // Game events

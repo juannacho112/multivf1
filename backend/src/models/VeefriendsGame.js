@@ -36,19 +36,35 @@ const veefriendsGameSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     },
-    deck: [{
-      id: String,
-      name: String,
-      skill: Number,
-      stamina: Number,
-      aura: Number,
-      baseTotal: Number,
-      finalTotal: Number,
-      rarity: String,
-      character: String,
-      type: String,
-      unlocked: Boolean
-    }],
+    deck: {
+      type: [{
+        id: String,
+        name: String,
+        skill: Number,
+        stamina: Number,
+        aura: Number,
+        baseTotal: Number,
+        finalTotal: Number,
+        rarity: String,
+        character: String,
+        type: String,
+        unlocked: Boolean
+      }],
+      default: [],
+      // Ensure card objects can be stored properly even if they're JSON strings first
+      set: function(cards) {
+        // If the cards are passed as a stringified array, parse it
+        if (typeof cards === 'string') {
+          try {
+            return JSON.parse(cards);
+          } catch (e) {
+            console.error("Error parsing cards:", e);
+            return [];
+          }
+        }
+        return cards;
+      }
+    },
     points: {
       skill: {
         type: Number,

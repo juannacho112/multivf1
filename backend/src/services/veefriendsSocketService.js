@@ -404,9 +404,21 @@ const setupVeefriendsSocketIO = (io) => {
         
         // Generate deck for player if not already set
         if (!game.players[playerIndex].deck || game.players[playerIndex].deck.length === 0) {
-          // Import cards dynamically to avoid circular dependencies
-          const { generateRandomDeck, fullCardPool } = await import('../utils/cardUtils.js');
-          game.players[playerIndex].deck = generateRandomDeck(fullCardPool, 20);
+          try {
+            // Import cards dynamically to avoid circular dependencies
+            const { generateRandomDeck, fullCardPool } = await import('../utils/cardUtils.js');
+            
+            // Generate the deck as proper objects
+            const generatedDeck = generateRandomDeck(fullCardPool, 20);
+            console.log(`Generated deck for ${game.players[playerIndex].username} with ${generatedDeck.length} cards`);
+            
+            // Assign the deck directly as objects
+            game.players[playerIndex].deck = generatedDeck;
+          } catch (error) {
+            console.error('Error generating deck:', error);
+            // Provide a minimal fallback deck if needed
+            game.players[playerIndex].deck = [];
+          }
         }
         
         await game.save();
@@ -707,8 +719,16 @@ const startGame = async (io, game) => {
   console.log(`Game started: ${game._id}`);
   
   // Start the first round by drawing cards
-  await processGameAction(game, 'player1', 'drawCards');
-  await game.save();
+  try {
+    await processGameAction(game, 'player1', 'drawCards');
+    await game.save();
+  } catch (error) {
+    console.error('Error processing first draw:', error);
+    // Send error notification to players
+    io.to(`game:${game._id}`).emit('error', { 
+      message: 'Failed to start game properly. Please try again.' 
+    });
+  }
   
   // Send updated game state after drawing cards
   io.to(`game:${game._id}`).emit('game:stateUpdate', {

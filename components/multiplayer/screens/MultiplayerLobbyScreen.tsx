@@ -183,7 +183,14 @@ export const MultiplayerLobbyScreen: React.FC<MultiplayerLobbyScreenProps> = ({ 
       <StatusBar style="auto" />
       
       {/* Show connection banner at the top if not connected */}
-      {connectionBanner}
+      {!isConnected && (
+        <View style={styles.connectionBanner}>
+          <ActivityIndicator size="small" color="white" />
+          <Text style={styles.connectionBannerText}>
+            Connecting to server...
+          </Text>
+        </View>
+      )}
       
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         {/* Header */}
