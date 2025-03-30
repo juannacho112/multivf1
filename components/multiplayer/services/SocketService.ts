@@ -220,13 +220,13 @@ class SocketService extends SimpleEventEmitter {
         reconnectionDelayMax: 5000,
         timeout: 20000,
         
-        // Critical - Set up proper transports for web compatibility
-        // Start with polling only, then upgrade to websocket if available
-        transports: ['polling'],
-        upgrade: true,
+        // Critical - Use both transports from the start to match server configuration
+        // This prevents the "xhr poll error" that happens during transport upgrade
+        transports: ['polling', 'websocket'],
         
         // Important additional settings
         path: '/socket.io/',
+        withCredentials: false, // Set to false for better CORS compatibility with wildcard origin
       };
       
       // Special handling for web browsers: Don't use extraHeaders which can cause issues
@@ -245,10 +245,10 @@ class SocketService extends SimpleEventEmitter {
       console.log(`Using Socket.IO with options: ${JSON.stringify({
         reconnection: socketOptions.reconnection,
         transports: socketOptions.transports,
-        upgrade: socketOptions.upgrade
+        withCredentials: socketOptions.withCredentials
       })}`);
       
-      console.log('Socket configured with initial polling transport with upgrade capability');
+      console.log('Socket configured with both polling and websocket transports');
       
       // Set up standard event listeners
       this.setupEventListeners();

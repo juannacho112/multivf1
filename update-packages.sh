@@ -1,116 +1,73 @@
 #!/bin/bash
 
-# VeeFriends Card Game - Package Update and Compatibility Script
-# Run with: ./update-packages.sh
-
-# Terminal colors
+# Colors for output
 GREEN='\033[0;32m'
+BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
-BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== VeeFriends Card Game Package Update Script ===${NC}"
-echo -e "${YELLOW}This script will update and fix package dependencies for compatibility${NC}"
-echo
+echo -e "${BLUE}==================================${NC}"
+echo -e "${BLUE}  VeeFriends Dependencies Update  ${NC}"
+echo -e "${BLUE}==================================${NC}\n"
 
-# Check if Node.js is installed
-if ! command -v node &> /dev/null; then
-    echo -e "${RED}Node.js is not installed. Please install Node.js first.${NC}"
-    exit 1
-fi
-
-# Function to update backend packages
-update_backend_packages() {
-    echo -e "${BLUE}Updating backend packages...${NC}"
-    
-    # Navigate to backend directory
-    cd backend
-    
-    # Create package backup
-    cp package.json package.json.bak
-    echo -e "${YELLOW}Backed up package.json to package.json.bak${NC}"
-    
-    # Install core backend dependencies
-    echo -e "${GREEN}Installing backend core dependencies...${NC}"
-    npm install --save express mongoose cors socket.io jsonwebtoken bcryptjs dotenv uuid
-    
-    # Install development dependencies
-    echo -e "${GREEN}Installing backend development dependencies...${NC}"
-    npm install --save-dev nodemon
-    
-    # Fix potential socket.io compatibility issues
-    echo -e "${YELLOW}Ensuring Socket.IO compatible versions...${NC}"
-    npm install --save socket.io@4.7.2
-    npm install --save-dev @types/socket.io@3.0.2
-    
-    # Check for dependency issues
-    echo -e "${BLUE}Checking for dependency issues...${NC}"
-    npm audit fix
-    
-    cd ..
-    
-    echo -e "${GREEN}Backend packages updated successfully.${NC}"
-    echo
+# Function to update packages in a directory
+update_packages() {
+  local dir=$1
+  local type=$2
+  
+  echo -e "${YELLOW}Checking ${type} dependencies...${NC}"
+  cd "${dir}" || { echo -e "${RED}Could not navigate to ${dir}${NC}"; return; }
+  
+  # Check for outdated packages
+  echo -e "${BLUE}Currently outdated packages:${NC}"
+  npm outdated
+  
+  # Backup package.json and package-lock.json
+  echo -e "${YELLOW}Backing up package files...${NC}"
+  cp package.json package.json.bak
+  if [ -f package-lock.json ]; then
+    cp package-lock.json package-lock.json.bak
+  fi
+  
+  # Update dependencies
+  echo -e "${GREEN}Updating ${type} dependencies...${NC}"
+  npm update
+  
+  # Update dev dependencies if in root or backend
+  if [ "${type}" != "frontend" ]; then
+    echo -e "${GREEN}Updating ${type} dev dependencies...${NC}"
+    npm update --dev
+  fi
+  
+  echo -e "${GREEN}${type^} dependencies updated successfully!${NC}\n"
+  cd - > /dev/null
 }
 
-# Function to update frontend packages
-update_frontend_packages() {
-    echo -e "${BLUE}Updating frontend packages...${NC}"
-    
-    # Create package backup
-    cp package.json package.json.bak
-    echo -e "${YELLOW}Backed up package.json to package.json.bak${NC}"
-    
-    # Install core frontend dependencies
-    echo -e "${GREEN}Installing frontend core dependencies...${NC}"
-    npm install --save expo @react-navigation/native @react-navigation/stack expo-constants expo-linking expo-router expo-web-browser expo-status-bar react-native socket.io-client @react-native-async-storage/async-storage
-    
-    # Install specific versions known to be compatible
-    echo -e "${YELLOW}Installing specific compatible versions...${NC}"
-    npm install --save socket.io-client@4.7.2  # Match backend socket.io version
-    npm install --save @react-native-async-storage/async-storage@1.18.2  # Ensure compatible with Expo
-    
-    # Add missing type definitions
-    echo -e "${GREEN}Installing type definitions...${NC}"
-    npm install --save-dev @types/react @types/react-native
-    
-    # Check for dependency issues
-    echo -e "${BLUE}Checking for dependency issues...${NC}"
-    npm audit fix
-    
-    echo -e "${GREEN}Frontend packages updated successfully.${NC}"
-    echo
-}
+# Main project directory
+PROJECT_DIR=$(pwd)
 
-# Main execution
-echo -e "${BLUE}Starting package updates...${NC}"
+# Update root project dependencies
+update_packages "${PROJECT_DIR}" "root"
 
-# First check if we have both frontend and backend structure
-if [ -d "backend" ]; then
-    echo -e "${GREEN}Found backend directory.${NC}"
-    
-    # Update backend packages
-    update_backend_packages
+# Update backend dependencies
+BACKEND_DIR="${PROJECT_DIR}/backend"
+if [ -d "${BACKEND_DIR}" ]; then
+  update_packages "${BACKEND_DIR}" "backend"
 else
-    echo -e "${RED}Backend directory not found. Skipping backend package updates.${NC}"
+  echo -e "${RED}Backend directory not found!${NC}"
 fi
 
-# Check for frontend structure (main package.json in root)
-if [ -f "package.json" ]; then
-    echo -e "${GREEN}Found frontend package.json.${NC}"
-    
-    # Update frontend packages
-    update_frontend_packages
-else
-    echo -e "${RED}Frontend package.json not found. Skipping frontend package updates.${NC}"
-fi
+echo -e "${BLUE}==================================${NC}"
+echo -e "${BLUE}    Package Updates Complete      ${NC}"
+echo -e "${BLUE}==================================${NC}\n"
 
-# Make scripts executable
-echo -e "${BLUE}Making startup scripts executable...${NC}"
-chmod +x start-dev.sh start-production.sh update-packages.sh
+echo -e "${YELLOW}Important Notes:${NC}"
+echo -e "1. Test the application thoroughly after updates"
+echo -e "2. If you encounter issues, restore from backups:"
+echo -e "   ${GREEN}cp package.json.bak package.json${NC}"
+echo -e "   ${GREEN}cp package-lock.json.bak package-lock.json${NC}"
+echo -e "   ${GREEN}npm ci${NC}"
+echo -e "3. Socket.IO version changes may require code updates\n"
 
-echo -e "${BLUE}=== Package update complete ===${NC}"
-echo -e "${GREEN}All dependencies have been updated to compatible versions.${NC}"
-echo -e "${YELLOW}You can now run the development server using: ./start-dev.sh${NC}"
-echo -e "${YELLOW}Or run in production mode using: ./start-production.sh${NC}"
+echo -e "${GREEN}Package backups are located in each directory.${NC}"

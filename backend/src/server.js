@@ -40,17 +40,17 @@ const allowedOrigins = [
 // Setup Socket.IO with proper CORS for mobile compatibility
 const io = new Server(server, {
   cors: {
-    origin: "*", // Most permissive setting for React Native compatibility
+    origin: allowedOrigins, // Use explicit list to prevent CORS errors
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: false, // Set to false for better mobile compatibility with wildcard origin
+    credentials: true, // Enable credentials for authenticated requests
     allowedHeaders: ["Content-Type", "Authorization", "User-Agent", "Accept"]
   },
   // Connection settings optimized for mobile clients
-  pingTimeout: 30000, // 30 second timeout (reduced for mobile)
-  pingInterval: 20000, // 20 second ping (slightly reduced)
+  pingTimeout: 60000, // 1 minute timeout - increased for better reliability 
+  pingInterval: 25000, // 25 second ping interval
   connectTimeout: 45000, // 45 second connect timeout
   
-  // Critical: Start with polling for compatibility, but allow upgrade
+  // Critical: Start with both transports instead of upgrading to fix "xhr poll error"
   transports: ['polling', 'websocket'],
   
   // Additional optimal settings

@@ -188,24 +188,24 @@ export const GameWaitingRoom: React.FC<GameWaitingRoomProps> = ({ onBack }) => {
       
       {/* Game info */}
       <View style={styles.gameInfoContainer}>
-        <Text style={styles.sectionTitle}>Game Info</Text>
+        <Text style={styles.sectionTitle}>VeeFriends Card Game</Text>
         <Text style={styles.infoText}>
-          • This is a turn-based card game where strategy is key
+          • Challenge your opponent with your cards' Skill, Stamina, and Aura attributes
         </Text>
         <Text style={styles.infoText}>
           • Both players must be ready to start the game
         </Text>
         <Text style={styles.infoText}>
-          • Each player starts with 3 energy and a hand of cards
+          • Each player receives a deck of VeeFriends character cards
         </Text>
         <Text style={styles.infoText}>
-          • Play cards from your hand to the field
+          • Take turns selecting attributes to challenge your opponent
         </Text>
         <Text style={styles.infoText}>
-          • Use card abilities to attack your opponent's cards
+          • Accept challenges or deny them strategically
         </Text>
         <Text style={styles.infoText}>
-          • Win by defeating all of your opponent's cards
+          • Win by being the first to reach 7 points in any attribute
         </Text>
       </View>
       
