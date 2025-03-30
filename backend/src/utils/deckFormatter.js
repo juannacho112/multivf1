@@ -64,8 +64,29 @@ export const ensureProperDeckFormat = (deck) => {
           
           // Last resort: try to parse it manually by extracting properties
           try {
-            // Extract card objects based on patterns in the string
-            // This is a very basic implementation that may need to be refined
+            // Try a direct manual approach by evaluating the string as JavaScript
+            // Note: This is safe because we're using it locally in a controlled way
+            // and not exposing it to user input directly
+            console.log("Manually extracting card data from string...");
+            
+            // Method 1: Simple function wrapping approach
+            try {
+              // First, ensure it's a proper JavaScript array
+              const jsArray = `(function() { return ${deck}; })()`;
+              const extractedCards = eval(jsArray);
+              
+              if (Array.isArray(extractedCards) && extractedCards.length > 0) {
+                console.log(`Successfully extracted ${extractedCards.length} cards via eval`);
+                return validateDeckArray(extractedCards);
+              }
+            } catch (evalError) {
+              console.log("Eval extraction failed:", evalError);
+            }
+            
+            // Method 2: Extract card objects based on patterns in the string as fallback
+            console.log("Trying regex pattern matching as fallback...");
+            
+            // More comprehensive regex approach
             const cardRegex = /{\s*id:\s*['"]([^'"]+)['"]\s*,\s*name:\s*['"]([^'"]+)['"]\s*,\s*skill:\s*(\d+)\s*,\s*stamina:\s*(\d+)\s*,\s*aura:\s*(\d+)\s*,\s*baseTotal:\s*(\d+)\s*,\s*finalTotal:\s*(\d+)\s*,\s*rarity:\s*['"]([^'"]+)['"]\s*,\s*character:\s*['"]([^'"]+)['"]\s*,\s*type:\s*['"]([^'"]+)['"]\s*,\s*unlocked:\s*(true|false)\s*}/g;
             
             const cards = [];
@@ -84,6 +105,38 @@ export const ensureProperDeckFormat = (deck) => {
                 type: match[10],
                 unlocked: match[11] === 'true'
               });
+            }
+            
+            // Last resort method: Direct string parsing by looking for card objects
+            if (cards.length === 0) {
+              console.log("Trying more direct string parsing...");
+              try {
+                // Find each card object by looking for patterns
+                const regex = /{([^{}]*)}/g;
+                let objectMatch;
+                
+                while ((objectMatch = regex.exec(deck)) !== null) {
+                  const cardStr = objectMatch[0];
+                  try {
+                    // Process this individual card string into a proper JSON object
+                    const cleanCardStr = cardStr
+                      .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Add quotes to property names
+                      .replace(/'/g, '"'); // Convert single quotes to double quotes
+                    
+                    const cardObj = JSON.parse(cleanCardStr);
+                    if (cardObj && cardObj.id && cardObj.name && 
+                        typeof cardObj.skill === 'number' && 
+                        typeof cardObj.stamina === 'number' && 
+                        typeof cardObj.aura === 'number') {
+                      cards.push(cardObj);
+                    }
+                  } catch (cardParseErr) {
+                    console.log(`Failed to parse card: ${cardStr.substring(0, 50)}...`);
+                  }
+                }
+              } catch (directParseError) {
+                console.log("Direct string parsing failed:", directParseError);
+              }
             }
             
             if (cards.length > 0) {

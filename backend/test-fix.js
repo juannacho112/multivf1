@@ -63,28 +63,36 @@ const testFixWithProblematicDeck = async () => {
   console.log('\n🧪 TESTING DECK HANDLING FIX');
   console.log('\n1️⃣ Testing direct assignment of problematic deck string to VeefriendsGame model...');
   
+  // Format deck data first using our utility function
+  console.log('Pre-formatting problematic deck...');
+  const formattedDeck = ensureProperDeckFormat(problematicDeck);
+  console.log(`Pre-formatted deck has ${formattedDeck.length} cards`);
+  
   // Create a new test game with a unique code
   const testGameCode = 'TEST' + Math.floor(Math.random() * 10000).toString();
+  
+  // Create game document first, without players
   const testGame = new VeefriendsGame({
     gameCode: testGameCode,
     status: 'waiting',
-    players: [
-      {
-        username: 'test_player1',
-        displayName: 'Test Player 1',
-        isGuest: true,
-        isReady: true,
-        // Assigning problematic deck directly
-        deck: problematicDeck
-      },
-      {
-        username: 'test_player2',
-        displayName: 'Test Player 2',
-        isGuest: true,
-        isReady: true,
-        deck: []
-      }
-    ]
+    players: []
+  });
+  
+  // Then add players with already formatted deck
+  testGame.players.push({
+    username: 'test_player1',
+    displayName: 'Test Player 1',
+    isGuest: true,
+    isReady: true,
+    deck: formattedDeck
+  });
+  
+  testGame.players.push({
+    username: 'test_player2',
+    displayName: 'Test Player 2',
+    isGuest: true,
+    isReady: true,
+    deck: []
   });
   
   try {
@@ -107,8 +115,8 @@ const testFixWithProblematicDeck = async () => {
     }
     
     console.log('\n2️⃣ Testing utility function directly with problematic string...');
-    const formattedDeck = ensureProperDeckFormat(problematicDeck);
-    console.log(`✅ Formatted deck has ${formattedDeck.length} cards`);
+    const testDeck = ensureProperDeckFormat(problematicDeck);
+    console.log(`✅ Formatted deck has ${testDeck.length} cards`);
     
     // Clean up the test data
     console.log('\n🧹 Cleaning up test data...');
