@@ -52,17 +52,38 @@ const veefriendsGameSchema = new mongoose.Schema({
         unlocked: Boolean
       }],
       default: [],
-      // Use our comprehensive formatter to ensure proper deck format
+      // Only converting data - no validation here to avoid conflicts with Mongoose
       set: function(cards) {
+        // If it's already an array of objects, return as is to avoid processing twice
+        if (Array.isArray(cards) && cards.length > 0 && typeof cards[0] === 'object') {
+          console.log(`Deck already in array format (${cards.length} cards)`);
+          return cards;
+        }
+        
         try {
-          const formattedDeck = ensureProperDeckFormat(cards);
-          console.log(`Deck formatted successfully (${formattedDeck.length} cards)`);
-          return formattedDeck;
+          // This should only handle format conversion, not validation
+          if (typeof cards === 'string') {
+            try {
+              // Just clean the string first, don't try to parse here
+              const cleanedString = cards.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
+              
+              // Use the formatter from imported utility
+              const formattedDeck = ensureProperDeckFormat(cleanedString);
+              console.log(`Deck formatted successfully via utility (${formattedDeck.length} cards)`);
+              return formattedDeck;
+            } catch (stringError) {
+              console.error("Error formatting string deck:", stringError);
+              return [];
+            }
+          }
+          return cards;
         } catch (e) {
-          console.error("Error formatting deck:", e);
+          console.error("Error in deck setter:", e);
           return [];
         }
-      }
+      },
+      // Tell Mongoose not to worry about exact type matching for array items
+      _id: false
     },
     points: {
       skill: {

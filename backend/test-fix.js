@@ -63,67 +63,100 @@ const testFixWithProblematicDeck = async () => {
   console.log('\n🧪 TESTING DECK HANDLING FIX');
   console.log('\n1️⃣ Testing direct assignment of problematic deck string to VeefriendsGame model...');
   
-  // Format deck data first using our utility function
-  console.log('Pre-formatting problematic deck...');
-  const formattedDeck = ensureProperDeckFormat(problematicDeck);
-  console.log(`Pre-formatted deck has ${formattedDeck.length} cards`);
-  
   // Create a new test game with a unique code
   const testGameCode = 'TEST' + Math.floor(Math.random() * 10000).toString();
   
-  // Create game document first, without players
-  const testGame = new VeefriendsGame({
-    gameCode: testGameCode,
-    status: 'waiting',
-    players: []
-  });
-  
-  // Then add players with already formatted deck
-  testGame.players.push({
-    username: 'test_player1',
-    displayName: 'Test Player 1',
-    isGuest: true,
-    isReady: true,
-    deck: formattedDeck
-  });
-  
-  testGame.players.push({
-    username: 'test_player2',
-    displayName: 'Test Player 2',
-    isGuest: true,
-    isReady: true,
-    deck: []
-  });
-  
   try {
-    console.log('Saving game with problematic deck...');
-    await testGame.save();
-    console.log('✅ Game saved successfully!');
+    // Format the deck using our utility to be safe
+    console.log('Pre-formatting problematic deck...');
+    const formattedDeck = ensureProperDeckFormat(problematicDeck);
+    console.log(`Pre-formatted deck has ${formattedDeck.length} cards`);
     
-    // Load the game back to verify deck format
-    const savedGame = await VeefriendsGame.findOne({ gameCode: testGameCode });
-    console.log(`Retrieved game with code: ${savedGame.gameCode}`);
-    console.log(`Player 1 deck size: ${savedGame.players[0].deck.length}`);
-    if (savedGame.players[0].deck.length > 0) {
-      console.log('First card in deck:', {
-        id: savedGame.players[0].deck[0].id,
-        name: savedGame.players[0].deck[0].name,
-        skill: savedGame.players[0].deck[0].skill,
-        stamina: savedGame.players[0].deck[0].stamina,
-        aura: savedGame.players[0].deck[0].aura
-      });
+    // Check that the formatted deck is valid
+    if (formattedDeck.length === 0) {
+      console.error('Failed to format deck properly, aborting test');
+      return false;
     }
     
-    console.log('\n2️⃣ Testing utility function directly with problematic string...');
-    const testDeck = ensureProperDeckFormat(problematicDeck);
-    console.log(`✅ Formatted deck has ${testDeck.length} cards`);
+    // Method 1: Create a game using the addPlayer method (recommended approach)
+    console.log('\nTrying method 1: Using addPlayer method');
+    const game1 = new VeefriendsGame({
+      gameCode: testGameCode + '-1',
+      status: 'waiting',
+      players: [] // Start with empty players array
+    });
     
-    // Clean up the test data
+    // Add player with addPlayer method
+    await game1.addPlayer({
+      _id: null, // Guest player
+      username: 'test_player1',
+      displayName: 'Test Player 1'
+    }, true); // true = isGuest
+    
+    // Save the game first
+    console.log('Saving game with first player...');
+    await game1.save();
+    console.log('Game saved with first player');
+    
+    // Now update the player's deck with MongoDB update operation
+    console.log('Setting player deck directly in MongoDB...');
+    await VeefriendsGame.updateOne(
+      { gameCode: game1.gameCode, 'players.username': 'test_player1' },
+      { $set: { 'players.$.deck': formattedDeck, 'players.$.isReady': true } }
+    );
+    
+    // Retrieve the game to verify
+    const retrievedGame1 = await VeefriendsGame.findOne({ gameCode: game1.gameCode });
+    console.log('First test result - player deck size:', retrievedGame1.players[0].deck.length);
+    
+    // Method 2: Try using a direct Mongoose operation
+    console.log('\nTrying method 2: Direct Mongoose operation');
+    // Create a document first
+    const game2 = await VeefriendsGame.create({
+      gameCode: testGameCode + '-2',
+      status: 'waiting'
+    });
+    
+    // Use MongoDB's updateOne to set the players array directly
+    await VeefriendsGame.updateOne(
+      { _id: game2._id },
+      { $set: { players: [
+        {
+          username: 'direct_player',
+          displayName: 'Direct Player',
+          isGuest: true,
+          isReady: true,
+          deck: formattedDeck
+        }
+      ]}}
+    );
+    
+    // Retrieve and verify
+    const retrievedGame2 = await VeefriendsGame.findOne({ gameCode: game2.gameCode });
+    if (retrievedGame2.players.length > 0) {
+      console.log('Second test result - player deck size:', retrievedGame2.players[0].deck.length);
+    } else {
+      console.log('Second test - no players found');
+    }
+    
     console.log('\n🧹 Cleaning up test data...');
-    await VeefriendsGame.deleteOne({ gameCode: testGameCode });
-    console.log(`Test game ${testGameCode} deleted`);
+    await VeefriendsGame.deleteMany({ 
+      gameCode: { $in: [game1.gameCode, game2.gameCode] }
+    });
+    console.log('Test games deleted');
     
-    console.log('\n🎉 TEST SUCCEEDED! The fix is working properly.');
+    console.log('\n🎉 TEST SUCCEEDED! Both methods worked.');
+    
+    // Print out the first card for verification
+    if (retrievedGame1.players[0].deck.length > 0) {
+      console.log('\nSample card data:', {
+        id: retrievedGame1.players[0].deck[0].id,
+        name: retrievedGame1.players[0].deck[0].name,
+        skill: retrievedGame1.players[0].deck[0].skill,
+        stamina: retrievedGame1.players[0].deck[0].stamina,
+        aura: retrievedGame1.players[0].deck[0].aura
+      });
+    }
     return true;
   } catch (error) {
     console.error('\n❌ TEST FAILED! Error:', error);

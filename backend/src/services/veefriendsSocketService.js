@@ -403,6 +403,11 @@ const setupVeefriendsSocketIO = (io) => {
         // Set player as ready
         game.players[playerIndex].isReady = true;
         
+        // Set player as ready first
+        game.players[playerIndex].isReady = true;
+        await game.save();
+        console.log(`Player ${game.players[playerIndex].username} marked as ready`);
+        
         // Generate deck for player if not already set
         if (!game.players[playerIndex].deck || game.players[playerIndex].deck.length === 0) {
           try {
@@ -446,28 +451,31 @@ const setupVeefriendsSocketIO = (io) => {
               unlocked: Boolean(card.unlocked !== false)
             }));
             
-            // Assign the deck directly as plain objects
-            game.players[playerIndex].deck = plainDeck;
-            console.log(`Deck assigned successfully for ${game.players[playerIndex].username} (${plainDeck.length} cards)`);
+            // IMPORTANT: Use direct MongoDB update instead of Mongoose's document system
+            // This bypasses any potential validation/casting issues with the deck
+            console.log(`Updating deck for ${game.players[playerIndex].username} using direct MongoDB operation`);
+            await VeefriendsGame.updateOne(
+              { _id: game._id, 'players._id': game.players[playerIndex]._id },
+              { $set: { [`players.${playerIndex}.deck`]: plainDeck } }
+            );
+            
+            // Reload the game to get the updated state
+            game = await VeefriendsGame.findById(game._id);
+            console.log(`Deck set successfully for ${game.players[playerIndex].username} (${game.players[playerIndex].deck.length} cards)`);
           } catch (error) {
             console.error('Error in deck generation process:', error);
-            // Last resort fallback - empty deck
-            game.players[playerIndex].deck = [];
+            // Last resort fallback - set empty deck
+            await VeefriendsGame.updateOne(
+              { _id: game._id, 'players._id': game.players[playerIndex]._id },
+              { $set: { [`players.${playerIndex}.deck`]: [] } }
+            );
+            
+            // Reload the game
+            game = await VeefriendsGame.findById(game._id);
           }
         } else {
-          // Make sure existing deck is properly formatted
-          const existingDeck = game.players[playerIndex].deck;
-          console.log(`Player ${game.players[playerIndex].username} already has a deck with ${existingDeck.length} cards`);
-          
-          // Additional safety check for existing decks
-          try {
-            game.players[playerIndex].deck = ensureProperDeckFormat(existingDeck);
-          } catch (formatError) {
-            console.error('Error formatting existing deck:', formatError);
-          }
+          console.log(`Player ${game.players[playerIndex].username} already has a deck with ${game.players[playerIndex].deck.length} cards`);
         }
-        
-        await game.save();
         
         // Notify all players in the game
         io.to(`game:${gameId}`).emit('game:playerReady', {
