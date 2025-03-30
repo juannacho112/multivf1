@@ -882,35 +882,67 @@ const startGame = async (io, game) => {
     
     console.log(`Game started notification sent for ${gameId}`);
     
-    // Start the first round by drawing cards
+    // Start the first round by preparing the game state
     try {
-      const result = await processGameAction(game, 'player1', 'drawCards');
+      // Initialize with proper game state - we're going directly to challengerPick phase
+      // instead of using processGameAction to avoid any issues
       
-      // If game state changed, update directly in MongoDB
-      if (result.gameStateChanged) {
-        const updateFields = {
-          cardsInPlay: game.cardsInPlay,
-          phase: game.phase,
-          deniedAttributes: game.deniedAttributes,
-          availableAttributes: game.availableAttributes
+      // Make sure both players have cards in their decks
+      if ((game.players[0].deck && game.players[0].deck.length > 0) && 
+          (game.players[1].deck && game.players[1].deck.length > 0)) {
+        
+        // Get the first cards for both players
+        const player1Card = game.players[0].deck[0];
+        const player2Card = game.players[1].deck[0];
+        
+        // Create the updated decks (removing the first card)
+        const player1Deck = [...game.players[0].deck.slice(1)];
+        const player2Deck = [...game.players[1].deck.slice(1)];
+        
+        // Set up the initial game state
+        const gameStateUpdate = {
+          status: 'active',
+          phase: 'challengerPick', // Start with challenger pick phase
+          cardsInPlay: {
+            player1: player1Card,
+            player2: player2Card
+          },
+          'players.0.deck': player1Deck,
+          'players.1.deck': player2Deck,
+          currentChallenger: 'player1',
+          deniedAttributes: [],
+          availableAttributes: ['skill', 'stamina', 'aura'],
+          challengeAttribute: null,
+          potSize: 1,
+          roundNumber: 1
         };
         
-        // Update the first player's deck (remove first card)
-        if (game.players[0].deck.length > 0) {
-          updateFields['players.0.deck'] = game.players[0].deck;
-        }
-        
-        // Update the second player's deck (remove first card)
-        if (game.players[1].deck.length > 0) {
-          updateFields['players.1.deck'] = game.players[1].deck;
-        }
-        
+        // Update the game state directly in MongoDB
         await VeefriendsGame.updateOne(
           { _id: gameId },
-          { $set: updateFields }
+          { $set: gameStateUpdate }
         );
         
-        console.log(`Initial draw processed for game ${gameId}`);
+        console.log(`Game initialized successfully for game ${gameId}. Cards in play set.`);
+      } else {
+        console.error(`Cannot start game - one or both players are missing their deck!`);
+        
+        // Try to log deck information
+        console.log(`Player 1 deck: ${game.players[0].deck?.length || 0} cards`);
+        console.log(`Player 2 deck: ${game.players[1].deck?.length || 0} cards`);
+        
+        // Set a default state that won't break the UI
+        await VeefriendsGame.updateOne(
+          { _id: gameId },
+          { 
+            $set: {
+              status: 'active',
+              phase: 'challengerPick', 
+              currentChallenger: 'player1',
+              cardsInPlay: { player1: null, player2: null }
+            }
+          }
+        );
       }
     } catch (error) {
       console.error('Error processing first draw:', error);

@@ -271,20 +271,30 @@ veefriendsGameSchema.methods.getGameState = function() {
     deniedAttributes: this.deniedAttributes,
     availableAttributes: this.availableAttributes,
     cardsInPlay: this.cardsInPlay,
-    burnPile: this.burnPile,
+    burnPile: this.burnPile ? this.burnPile.slice(0, 10) : [], // Only send the last 10 burned cards for performance
     roundNumber: this.roundNumber,
     potSize: this.potSize,
-    players: this.players.map(player => ({
-      userId: player.userId,
-      username: player.username,
-      displayName: player.displayName,
-      isReady: player.isReady,
-      isGuest: player.isGuest,
-      points: player.points,
-      terrificTokenUsed: player.terrificTokenUsed,
-      deckCount: player.deck.length
-    })),
-    winner: this.winner
+    players: this.players.map((player, index) => {
+      // Create player state with essential information
+      const playerState = {
+        userId: player.userId,
+        username: player.username,
+        displayName: player.displayName,
+        isReady: player.isReady,
+        isGuest: player.isGuest,
+        points: player.points,
+        terrificTokenUsed: player.terrificTokenUsed,
+        deckCount: player.deck ? player.deck.length : 0,
+        // Include the top card of the player's deck (for draw animations)
+        topCard: player.deck && player.deck.length > 0 ? player.deck[0] : null,
+        // Include the player's actual position for UI purposes
+        position: index === 0 ? 'player1' : 'player2'
+      };
+      
+      return playerState;
+    }),
+    // Always include winner field, null if no winner yet
+    winner: this.winner || null
   };
 };
 

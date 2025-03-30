@@ -1,33 +1,42 @@
 #!/bin/bash
+# Cleanup script for VeeFriends multiplayer database
+# Fixes issues with deck formatting and game state
 
-# Script to run the deck data cleanup utility
-echo "Starting VeeFriends deck data cleanup..."
-echo "This script will cleanup any string deck data in the MongoDB database"
+# Set error handling
+set -e
+
+echo "=== VeeFriends Database Cleanup Tool ==="
+echo "This script will fix database issues with deck formatting"
+echo "and game state consistency problems."
 echo ""
-
-# Change to the backend directory if executed from elsewhere
-cd "$(dirname "$0")"
 
 # Check if Node.js is installed
 if ! command -v node &> /dev/null; then
-    echo "Error: Node.js is not installed"
+    echo "Error: Node.js is not installed. Please install Node.js first."
     exit 1
 fi
 
-# Run the cleanup utility
-echo "Running cleanup script..."
-node --experimental-modules src/utils/cleanupDeckData.js
+# Navigate to the backend directory
+cd "$(dirname "$0")"
 
-# Check the exit status
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "✅ Cleanup completed successfully"
-    echo "Any games with string deck data have been fixed"
-else
-    echo ""
-    echo "❌ Cleanup failed"
-    echo "Please check the error messages above"
+# Check if package.json exists
+if [ ! -f "package.json" ]; then
+    echo "Error: package.json not found. Make sure you're running this from the backend directory."
+    exit 1
 fi
 
+# Check if .env file exists
+if [ ! -f ".env" ]; then
+    echo "Error: .env file not found. You need a .env file with MONGODB_URI defined."
+    exit 1
+fi
+
+echo "Installing dependencies if needed..."
+npm install dotenv mongoose
+
+echo "Starting database cleanup..."
+node cleanup-db.js
+
 echo ""
-echo "You can now start the server normally"
+echo "Cleanup process completed!"
+echo "Check the output above for details on fixed games."
