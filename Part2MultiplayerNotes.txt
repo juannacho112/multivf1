@@ -1,0 +1,136 @@
+# VeeFriends Multiplayer - Analysis & Migration Plan
+
+## Current Architecture Overview
+
+### Single Player Game (Target Implementation)
+- **Card Model**: Based on skill/stamina/aura attributes (models/Card.ts)
+- **Game Mechanics**: 
+  - Round-based gameplay with challenge/accept/deny phases
+  - Players take turns as challenger to pick an attribute to compete on
+  - Points system based on winning challenges with skill/stamina/aura stats
+  - No energy/hand mechanics (draw directly from deck)
+- **UI Components**: Located in `components/veefriends/` and include:
+  - CardComponent.tsx - Displays skill/stamina/aura attributes
+  - FlippableCard.tsx - Card animation for battles
+  - GameScreen.tsx - Main game screen with battle logic
+  - AttributeSelector.tsx - For selecting challenge attributes
+  - RoundResultScreen.tsx - Shows round results
+  - VictoryScreen.tsx - End game screen
+
+### Multiplayer Game (Current Implementation)
+- **Server Model**: VeefriendsGame.js in backend/src/models/
+- **Socket Service**: veefriendsSocketService.js in backend/src/services/
+- **Card Generation**: Uses backend/src/utils/cardUtils.js
+- **Client Components**: Located in components/multiplayer/
+- **Issues**:
+  - Different game mechanics (energy-based system)
+  - MongoDB schema validation failing due to stringified decks
+  - Duplicated game logic between client and server
+
+## Migration Steps
+
+### 1. Backend Changes
+
+#### Fix VeefriendsGame.js Model
+- Update the deck schema setter to properly handle string data
+- Add better validation for card objects
+- Fix the schema to accurately match the Card interface from frontend
+
+```javascript
+deck: {
+  type: [{
+    id: String,
+    name: String,
+    skill: Number,
+    stamina: Number,
+    aura: Number,
+    baseTotal: Number,
+    finalTotal: Number,
+    rarity: String,
+    character: String,
+    type: String,
+    unlocked: Boolean
+  }],
+  default: [],
+  set: function(cards) {
+    // If the cards are passed as a stringified array, parse it
+    if (typeof cards === 'string') {
+      try {
+        // Clean up newlines and whitespace
+        const cleanedString = cards.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
+        return JSON.parse(cleanedString);
+      } catch (e) {
+        console.error("Error parsing cards:", e);
+        return [];
+      }
+    }
+    return cards;
+  }
+}
+```
+
+#### Update Game Logic in veefriendsSocketService.js
+- Remove energy-based game logic
+- Implement the same phases as single player:
+  - draw
+  - challengerPick
+  - acceptDeny
+  - resolve
+  - gameOver
+- Update the processGameAction function to handle these phases
+
+#### Clean Up cardUtils.js
+- Remove old energy-based card game functions (createCardTemplate, getStarterDeck, getRandomCards)
+- Keep only the VeeFriends card implementation (createVeefriendsCard, generateRandomDeck)
+- Add more robust error handling in card generation
+
+### 2. Frontend Changes
+
+#### Update Multiplayer Components
+- Replace energy-based UI with skill/stamina/aura UI
+- Reuse the same components from components/veefriends/ in multiplayer mode
+- Implement shared hooks for game mechanics
+
+#### Socket Event Handling
+- Update socket events to match the single player game phases
+- Map server events to the appropriate client-side actions
+- Handle synchronization of game state between players
+
+#### Deck Selection
+- Add ability to use previously saved decks from single player mode
+- Implement the same random deck generation in multiplayer
+- Share deck building components between modes
+
+## Shared Game Logic
+
+### Game Phases and Flow
+1. **draw**: Players draw cards from their decks
+2. **challengerPick**: Current challenger selects an attribute
+3. **acceptDeny**: Opponent accepts or denies the attribute
+4. **resolve**: Cards are compared and winner determined
+5. **gameOver**: Game ends when a player has no cards left
+
+### Card Comparison Logic
+- When comparing cards, higher attribute values win
+- Winner takes both cards into their deck
+- Points are awarded based on the attribute used
+- Special cases (ties, terrific tokens) handled consistently
+
+### Decks and Card Pool
+- Same card pool used for both single player and multiplayer
+- Deck building rules (rarity points, unique characters) applied consistently
+- Allow importing saved decks from single player to multiplayer
+
+## Technical Debt to Address
+1. Remove duplicate game logic between backend and frontend
+2. Consolidate card models into a shared type definition
+3. Better error handling for socket events
+4. Improved logging for debugging game state
+5. Cleanup of legacy code once migration is complete
+
+## Testing Strategy
+1. Unit test card comparison logic
+2. Integration test game phase transitions
+3. End-to-end test multiplayer sessions
+4. Stress test with multiple concurrent games
+5. Validation tests for deck generation and storage 

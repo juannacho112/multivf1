@@ -412,13 +412,40 @@ const setupVeefriendsSocketIO = (io) => {
             const generatedDeck = generateRandomDeck(fullCardPool, 20);
             console.log(`Generated deck for ${game.players[playerIndex].username} with ${generatedDeck.length} cards`);
             
+            // Validate the generated deck
+            if (!Array.isArray(generatedDeck)) {
+              throw new Error('Generated deck is not an array');
+            }
+            
+            // Ensure each card in the deck is a valid object
+            for (let i = 0; i < generatedDeck.length; i++) {
+              const card = generatedDeck[i];
+              if (!card || typeof card !== 'object') {
+                throw new Error(`Invalid card at index ${i}: not an object`);
+              }
+              if (!card.id || !card.name || typeof card.skill !== 'number' || 
+                  typeof card.stamina !== 'number' || typeof card.aura !== 'number') {
+                throw new Error(`Invalid card at index ${i}: missing required properties`);
+              }
+            }
+            
             // Assign the deck directly as objects
             game.players[playerIndex].deck = generatedDeck;
+            console.log(`Deck assigned successfully for ${game.players[playerIndex].username}`);
           } catch (error) {
-            console.error('Error generating deck:', error);
+            console.error('Error generating or validating deck:', error);
             // Provide a minimal fallback deck if needed
-            game.players[playerIndex].deck = [];
+            try {
+              const { getVeefriendsStarterDeck } = await import('../utils/cardUtils.js');
+              game.players[playerIndex].deck = getVeefriendsStarterDeck();
+              console.log(`Using fallback starter deck for ${game.players[playerIndex].username}`);
+            } catch (fallbackError) {
+              console.error('Error using fallback deck:', fallbackError);
+              game.players[playerIndex].deck = [];
+            }
           }
+        } else {
+          console.log(`Player ${game.players[playerIndex].username} already has a deck with ${game.players[playerIndex].deck.length} cards`);
         }
         
         await game.save();

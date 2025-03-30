@@ -56,7 +56,9 @@ const veefriendsGameSchema = new mongoose.Schema({
         // If the cards are passed as a stringified array, parse it
         if (typeof cards === 'string') {
           try {
-            return JSON.parse(cards);
+            // Clean up newlines and other whitespace before parsing
+            const cleanedString = cards.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
+            return JSON.parse(cleanedString);
           } catch (e) {
             console.error("Error parsing cards:", e);
             return [];
