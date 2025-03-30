@@ -2,6 +2,7 @@ import VeefriendsGame from '../models/VeefriendsGame.js';
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import { ensureProperDeckFormat } from '../utils/deckFormatter.js';
 
 // Store for active socket connections
 const activeConnections = new Map(); // socketId -> { userId, username, gameId }
@@ -406,46 +407,64 @@ const setupVeefriendsSocketIO = (io) => {
         if (!game.players[playerIndex].deck || game.players[playerIndex].deck.length === 0) {
           try {
             // Import cards dynamically to avoid circular dependencies
-            const { generateRandomDeck, fullCardPool } = await import('../utils/cardUtils.js');
+            const { generateRandomDeck, fullCardPool, getVeefriendsStarterDeck } = await import('../utils/cardUtils.js');
             
-            // Generate the deck as proper objects
-            const generatedDeck = generateRandomDeck(fullCardPool, 20);
-            console.log(`Generated deck for ${game.players[playerIndex].username} with ${generatedDeck.length} cards`);
+            let playerDeck;
             
-            // Validate the generated deck
-            if (!Array.isArray(generatedDeck)) {
-              throw new Error('Generated deck is not an array');
-            }
-            
-            // Ensure each card in the deck is a valid object
-            for (let i = 0; i < generatedDeck.length; i++) {
-              const card = generatedDeck[i];
-              if (!card || typeof card !== 'object') {
-                throw new Error(`Invalid card at index ${i}: not an object`);
-              }
-              if (!card.id || !card.name || typeof card.skill !== 'number' || 
-                  typeof card.stamina !== 'number' || typeof card.aura !== 'number') {
-                throw new Error(`Invalid card at index ${i}: missing required properties`);
-              }
-            }
-            
-            // Assign the deck directly as objects
-            game.players[playerIndex].deck = generatedDeck;
-            console.log(`Deck assigned successfully for ${game.players[playerIndex].username}`);
-          } catch (error) {
-            console.error('Error generating or validating deck:', error);
-            // Provide a minimal fallback deck if needed
             try {
-              const { getVeefriendsStarterDeck } = await import('../utils/cardUtils.js');
-              game.players[playerIndex].deck = getVeefriendsStarterDeck();
-              console.log(`Using fallback starter deck for ${game.players[playerIndex].username}`);
-            } catch (fallbackError) {
-              console.error('Error using fallback deck:', fallbackError);
-              game.players[playerIndex].deck = [];
+              // Generate the deck as proper objects
+              const generatedDeck = generateRandomDeck(fullCardPool, 20);
+              console.log(`Generated deck for ${game.players[playerIndex].username} with ${generatedDeck.length} cards`);
+              
+              // Use our formatter to ensure proper structure before assigning
+              playerDeck = ensureProperDeckFormat(generatedDeck);
+            } catch (genError) {
+              console.error('Error generating random deck:', genError);
+              // Fallback to starter deck
+              console.log('Falling back to starter deck');
+              const starterDeck = getVeefriendsStarterDeck();
+              playerDeck = ensureProperDeckFormat(starterDeck);
             }
+            
+            // Final validation
+            if (!Array.isArray(playerDeck) || playerDeck.length === 0) {
+              throw new Error('Failed to create a valid deck');
+            }
+            
+            // Explicitly create array of plain objects (not Mongoose documents)
+            const plainDeck = playerDeck.map(card => ({
+              id: String(card.id),
+              name: String(card.name),
+              skill: Number(card.skill),
+              stamina: Number(card.stamina),
+              aura: Number(card.aura),
+              baseTotal: Number(card.baseTotal || 0),
+              finalTotal: Number(card.finalTotal || 0),
+              rarity: String(card.rarity || 'common'),
+              character: String(card.character || ''),
+              type: String(card.type || 'standard'),
+              unlocked: Boolean(card.unlocked !== false)
+            }));
+            
+            // Assign the deck directly as plain objects
+            game.players[playerIndex].deck = plainDeck;
+            console.log(`Deck assigned successfully for ${game.players[playerIndex].username} (${plainDeck.length} cards)`);
+          } catch (error) {
+            console.error('Error in deck generation process:', error);
+            // Last resort fallback - empty deck
+            game.players[playerIndex].deck = [];
           }
         } else {
-          console.log(`Player ${game.players[playerIndex].username} already has a deck with ${game.players[playerIndex].deck.length} cards`);
+          // Make sure existing deck is properly formatted
+          const existingDeck = game.players[playerIndex].deck;
+          console.log(`Player ${game.players[playerIndex].username} already has a deck with ${existingDeck.length} cards`);
+          
+          // Additional safety check for existing decks
+          try {
+            game.players[playerIndex].deck = ensureProperDeckFormat(existingDeck);
+          } catch (formatError) {
+            console.error('Error formatting existing deck:', formatError);
+          }
         }
         
         await game.save();
@@ -711,7 +730,7 @@ const processMatchmaking = async (io) => {
 // Start a game
 const startGame = async (io, game) => {
   // Import cards dynamically to avoid circular dependencies
-  const { generateRandomDeck, fullCardPool } = await import('../utils/cardUtils.js');
+  const { generateRandomDeck, fullCardPool, getVeefriendsStarterDeck } = await import('../utils/cardUtils.js');
   
   // Initialize game state
   game.status = 'active';
@@ -726,8 +745,34 @@ const startGame = async (io, game) => {
   
   // Initialize player decks if not already set
   for (let i = 0; i < game.players.length; i++) {
-    if (!game.players[i].deck || game.players[i].deck.length === 0) {
-      game.players[i].deck = generateRandomDeck(fullCardPool, 20);
+    try {
+      if (!game.players[i].deck || game.players[i].deck.length === 0) {
+        // Generate a new deck
+        let newDeck;
+        try {
+          // Try to generate a random deck
+          const generatedDeck = generateRandomDeck(fullCardPool, 20);
+          // Ensure proper format
+          newDeck = ensureProperDeckFormat(generatedDeck);
+        } catch (genError) {
+          console.error(`Error generating random deck for player ${i+1}:`, genError);
+          // Fallback to starter deck
+          const starterDeck = getVeefriendsStarterDeck();
+          newDeck = ensureProperDeckFormat(starterDeck);
+        }
+        
+        // Assign the properly formatted deck
+        game.players[i].deck = newDeck;
+        console.log(`Assigned new deck to player ${i+1} (${game.players[i].username}) with ${newDeck.length} cards`);
+      } else {
+        // Format existing deck
+        game.players[i].deck = ensureProperDeckFormat(game.players[i].deck);
+        console.log(`Reformatted existing deck for player ${i+1} (${game.players[i].username})`);
+      }
+    } catch (error) {
+      console.error(`Error setting up deck for player ${i+1}:`, error);
+      // Emergency fallback - empty array to prevent crashes
+      game.players[i].deck = [];
     }
     
     // Reset player points and terrific token

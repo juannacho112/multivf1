@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
+import { ensureProperDeckFormat } from '../utils/deckFormatter.js';
 
 const veefriendsGameSchema = new mongoose.Schema({
   gameCode: {
@@ -51,20 +52,16 @@ const veefriendsGameSchema = new mongoose.Schema({
         unlocked: Boolean
       }],
       default: [],
-      // Ensure card objects can be stored properly even if they're JSON strings first
+      // Use our comprehensive formatter to ensure proper deck format
       set: function(cards) {
-        // If the cards are passed as a stringified array, parse it
-        if (typeof cards === 'string') {
-          try {
-            // Clean up newlines and other whitespace before parsing
-            const cleanedString = cards.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
-            return JSON.parse(cleanedString);
-          } catch (e) {
-            console.error("Error parsing cards:", e);
-            return [];
-          }
+        try {
+          const formattedDeck = ensureProperDeckFormat(cards);
+          console.log(`Deck formatted successfully (${formattedDeck.length} cards)`);
+          return formattedDeck;
+        } catch (e) {
+          console.error("Error formatting deck:", e);
+          return [];
         }
-        return cards;
       }
     },
     points: {
