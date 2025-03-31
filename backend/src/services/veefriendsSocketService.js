@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { ensureProperDeckFormat } from '../utils/deckFormatter.js';
+import { formatDeck, safelyStoreDeck, getPlayerDeck } from '../utils/deckProcessingService.js';
 
 // Store for active socket connections
 const activeConnections = new Map(); // socketId -> { userId, username, gameId }
@@ -411,70 +412,102 @@ const setupVeefriendsSocketIO = (io) => {
         // Generate deck for player if not already set
         if (!game.players[playerIndex].deck || game.players[playerIndex].deck.length === 0) {
           try {
-            // Import cards dynamically to avoid circular dependencies
-            const { generateRandomDeck, fullCardPool, getVeefriendsStarterDeck } = await import('../utils/cardUtils.js');
+            // First check if player already has a valid deck stored directly in MongoDB
+            const existingDeck = await getPlayerDeck(game._id.toString(), playerIndex);
             
-            let playerDeck;
-            
-            try {
-              // Generate the deck as proper objects
-              const generatedDeck = generateRandomDeck(fullCardPool, 20);
-              console.log(`Generated deck for ${game.players[playerIndex].username} with ${generatedDeck.length} cards`);
+            if (existingDeck && existingDeck.length > 0) {
+              console.log(`Player ${game.players[playerIndex].username} has ${existingDeck.length} cards in MongoDB`);
+              // Update the local game object to reflect the MongoDB state
+              game.players[playerIndex].deck = existingDeck;
+            } else {
+              // Import cards dynamically to avoid circular dependencies
+              const { generateRandomDeck, fullCardPool, getVeefriendsStarterDeck } = await import('../utils/cardUtils.js');
               
-              // Use our formatter to ensure proper structure before assigning
-              playerDeck = ensureProperDeckFormat(generatedDeck);
-            } catch (genError) {
-              console.error('Error generating random deck:', genError);
-              // Fallback to starter deck
-              console.log('Falling back to starter deck');
-              const starterDeck = getVeefriendsStarterDeck();
-              playerDeck = ensureProperDeckFormat(starterDeck);
+              // Generate a new deck
+              let generatedDeck;
+              try {
+                generatedDeck = generateRandomDeck(fullCardPool, 20);
+                console.log(`Generated random deck for ${game.players[playerIndex].username} with ${generatedDeck.length} cards`);
+              } catch (genError) {
+                console.error('Error generating random deck:', genError);
+                // Fallback to starter deck
+                try {
+                  generatedDeck = getVeefriendsStarterDeck();
+                  console.log('Falling back to starter deck');
+                } catch (fallbackError) {
+                  console.error('Error with starter deck:', fallbackError);
+                  // Last resort - create minimal emergency deck
+                  generatedDeck = [{
+                    id: `emergency-${Date.now()}`,
+                    name: "Emergency Card",
+                    skill: 10,
+                    stamina: 10,
+                    aura: 10,
+                    baseTotal: 30,
+                    finalTotal: 30,
+                    rarity: "common",
+                    character: "Emergency",
+                    type: "standard",
+                    unlocked: true
+                  }];
+                  console.log('Using emergency single card deck');
+                }
+              }
+              
+              // Use the dedicated service to safely store the deck
+              console.log(`Storing deck for ${game.players[playerIndex].username} using deck service`);
+              const success = await safelyStoreDeck(game._id.toString(), playerIndex, generatedDeck);
+              
+              if (success) {
+                console.log(`Successfully stored deck for ${game.players[playerIndex].username}`);
+                // Get the deck that was actually stored to update local game object
+                const storedDeck = await getPlayerDeck(game._id.toString(), playerIndex);
+                if (storedDeck && storedDeck.length > 0) {
+                  game.players[playerIndex].deck = storedDeck;
+                }
+              } else {
+                console.error(`Failed to store deck with deck service for ${game.players[playerIndex].username}`);
+                // Last resort fallback
+                const formattedDeck = formatDeck(generatedDeck);
+                
+                // Update directly with MongoDB operation
+                await VeefriendsGame.updateOne(
+                  { _id: game._id },
+                  { $set: { [`players.${playerIndex}.deck`]: formattedDeck } }
+                );
+                
+                // Reload the game to get the updated state
+                game = await VeefriendsGame.findById(game._id);
+              }
             }
             
-            // Final validation
-            if (!Array.isArray(playerDeck) || playerDeck.length === 0) {
-              throw new Error('Failed to create a valid deck');
-            }
-            
-            // Explicitly create array of plain objects (not Mongoose documents)
-            const plainDeck = playerDeck.map(card => ({
-              id: String(card.id),
-              name: String(card.name),
-              skill: Number(card.skill),
-              stamina: Number(card.stamina),
-              aura: Number(card.aura),
-              baseTotal: Number(card.baseTotal || 0),
-              finalTotal: Number(card.finalTotal || 0),
-              rarity: String(card.rarity || 'common'),
-              character: String(card.character || ''),
-              type: String(card.type || 'standard'),
-              unlocked: Boolean(card.unlocked !== false)
-            }));
-            
-            // IMPORTANT: Use direct MongoDB update instead of Mongoose's document system
-            // This bypasses any potential validation/casting issues with the deck
-            console.log(`Updating deck for ${game.players[playerIndex].username} using direct MongoDB operation`);
-            await VeefriendsGame.updateOne(
-              { _id: game._id, 'players._id': game.players[playerIndex]._id },
-              { $set: { [`players.${playerIndex}.deck`]: plainDeck } }
-            );
-            
-            // Reload the game to get the updated state
-            game = await VeefriendsGame.findById(game._id);
-            console.log(`Deck set successfully for ${game.players[playerIndex].username} (${game.players[playerIndex].deck.length} cards)`);
+            console.log(`Player ${game.players[playerIndex].username} now has a deck with ${game.players[playerIndex].deck?.length || 0} cards`);
           } catch (error) {
-            console.error('Error in deck generation process:', error);
-            // Last resort fallback - set empty deck
-            await VeefriendsGame.updateOne(
-              { _id: game._id, 'players._id': game.players[playerIndex]._id },
-              { $set: { [`players.${playerIndex}.deck`]: [] } }
-            );
-            
-            // Reload the game
-            game = await VeefriendsGame.findById(game._id);
+            console.error(`Critical error in deck setup for ${game.players[playerIndex].username}:`, error);
+            // Create an absolute minimum viable deck as last resort
+            try {
+              const emergencyDeck = [{
+                id: `emergency-${Date.now()}`,
+                name: "Emergency Card",
+                skill: 10, stamina: 10, aura: 10,
+                baseTotal: 30, finalTotal: 30,
+                rarity: "common", character: "Emergency", 
+                type: "standard", unlocked: true
+              }];
+              
+              await VeefriendsGame.updateOne(
+                { _id: game._id },
+                { $set: { [`players.${playerIndex}.deck`]: emergencyDeck } }
+              );
+              
+              // Update local game object
+              game = await VeefriendsGame.findById(game._id);
+            } catch (lastError) {
+              console.error("Failed even emergency deck creation:", lastError);
+            }
           }
         } else {
-          console.log(`Player ${game.players[playerIndex].username} already has a deck with ${game.players[playerIndex].deck.length} cards`);
+          console.log(`Player ${game.players[playerIndex].username} already has ${game.players[playerIndex].deck.length} cards in deck`);
         }
         
         // Notify all players in the game
@@ -787,67 +820,86 @@ const startGame = async (io, game) => {
     // Initialize player decks if not already set
     for (let i = 0; i < game.players.length; i++) {
       try {
-        let playerDeck = [];
-        
-        // Check if player already has a deck
-        if (!game.players[i].deck || game.players[i].deck.length === 0) {
-          try {
-            // Try to generate a random deck
-            const generatedDeck = generateRandomDeck(fullCardPool, 20);
-            console.log(`Generated deck for player ${i+1} with ${generatedDeck.length} cards`);
-            
-            // Ensure proper format
-            playerDeck = ensureProperDeckFormat(generatedDeck);
-          } catch (genError) {
-            console.error(`Error generating random deck for player ${i+1}:`, genError);
-            
-            // Fallback to starter deck
-            try {
-              const starterDeck = getVeefriendsStarterDeck();
-              playerDeck = ensureProperDeckFormat(starterDeck);
-              console.log(`Using starter deck for player ${i+1}`);
-            } catch (fallbackError) {
-              console.error(`Error using fallback deck for player ${i+1}:`, fallbackError);
-              // Last resort - empty array
-              playerDeck = [];
-            }
-          }
-        } else {
-          playerDeck = Array.isArray(game.players[i].deck) ? game.players[i].deck : [];
-          console.log(`Player ${i+1} already has a deck with ${playerDeck.length} cards`);
+        // Check if player already has a valid deck
+        const existingDeck = await getPlayerDeck(gameId, i);
+        if (existingDeck && existingDeck.length > 0) {
+          console.log(`Player ${i+1} already has a valid deck with ${existingDeck.length} cards`);
+          continue; // Skip to next player if this one has a deck
         }
         
-        // Convert to plain JS objects to avoid any Mongoose document issues
-        const plainDeck = playerDeck.map(card => ({
-          id: String(card.id),
-          name: String(card.name),
-          skill: Number(card.skill),
-          stamina: Number(card.stamina),
-          aura: Number(card.aura),
-          baseTotal: Number(card.baseTotal || 0),
-          finalTotal: Number(card.finalTotal || 0),
-          rarity: String(card.rarity || 'common'),
-          character: String(card.character || ''),
-          type: String(card.type || 'standard'),
-          unlocked: Boolean(card.unlocked !== false)
-        }));
+        // Generate a new deck for this player
+        let generatedDeck;
+        try {
+          // Try to generate a random deck
+          generatedDeck = generateRandomDeck(fullCardPool, 20);
+          console.log(`Generated deck for player ${i+1} with ${generatedDeck.length} cards`);
+        } catch (genError) {
+          console.error(`Error generating random deck for player ${i+1}:`, genError);
+          
+          // Fallback to starter deck
+          try {
+            generatedDeck = getVeefriendsStarterDeck();
+            console.log(`Using starter deck for player ${i+1}`);
+          } catch (fallbackError) {
+            console.error(`Error using fallback deck for player ${i+1}:`, fallbackError);
+            
+            // Last resort - create a minimal deck with one card
+            generatedDeck = [{
+              id: `emergency-card-${Date.now()}`,
+              name: "Emergency Card",
+              skill: 10,
+              stamina: 10,
+              aura: 10,
+              baseTotal: 30,
+              finalTotal: 30,
+              rarity: "common",
+              character: "Emergency",
+              type: "standard",
+              unlocked: true
+            }];
+            console.log(`Using emergency single-card deck for player ${i+1}`);
+          }
+        }
         
-        // Reset player points and terrific token with MongoDB update
-        const playerUpdate = {
-          [`players.${i}.deck`]: plainDeck,
-          [`players.${i}.points.skill`]: 0,
-          [`players.${i}.points.stamina`]: 0,
-          [`players.${i}.points.aura`]: 0,
-          [`players.${i}.terrificTokenUsed`]: false
-        };
+        // Store the deck using our specialized service
+        const success = await safelyStoreDeck(gameId, i, generatedDeck);
         
-        // Update player with deck and reset stats
+        if (!success) {
+          console.error(`Failed to store deck for player ${i+1} - using direct update as fallback`);
+          
+          // Format the deck with our utility to ensure it's valid
+          const safeDeck = formatDeck(generatedDeck);
+          
+          // Reset player points and terrific token with MongoDB update
+          const playerUpdate = {
+            [`players.${i}.deck`]: safeDeck,
+            [`players.${i}.points.skill`]: 0,
+            [`players.${i}.points.stamina`]: 0,
+            [`players.${i}.points.aura`]: 0,
+            [`players.${i}.terrificTokenUsed`]: false
+          };
+          
+          // Update player with deck and reset stats
+          await VeefriendsGame.updateOne(
+            { _id: gameId },
+            { $set: playerUpdate }
+          );
+        }
+        
+        // Reset player stats (regardless of deck update success)
         await VeefriendsGame.updateOne(
           { _id: gameId },
-          { $set: playerUpdate }
+          { 
+            $set: {
+              [`players.${i}.points.skill`]: 0,
+              [`players.${i}.points.stamina`]: 0,
+              [`players.${i}.points.aura`]: 0,
+              [`players.${i}.terrificTokenUsed`]: false
+            }
+          }
         );
         
-        console.log(`Updated player ${i+1} deck and stats via MongoDB operation`);
+        console.log(`Updated player ${i+1} deck and reset stats`);
       } catch (error) {
         console.error(`Error setting up player ${i+1}:`, error);
         // Try basic update with empty deck as last resort
@@ -855,7 +907,6 @@ const startGame = async (io, game) => {
           { _id: gameId },
           { 
             $set: {
-              [`players.${i}.deck`]: [],
               [`players.${i}.points.skill`]: 0,
               [`players.${i}.points.stamina`]: 0,
               [`players.${i}.points.aura`]: 0,
