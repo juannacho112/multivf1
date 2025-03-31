@@ -52,7 +52,7 @@ const veefriendsGameSchema = new mongoose.Schema({
         unlocked: Boolean
       }],
       default: [],
-      // Only converting data - no validation here to avoid conflicts with Mongoose
+      // Enhanced setter function to handle various input formats
       set: function(cards) {
         // If it's already an array of objects, return as is to avoid processing twice
         if (Array.isArray(cards) && cards.length > 0 && typeof cards[0] === 'object') {
@@ -61,16 +61,33 @@ const veefriendsGameSchema = new mongoose.Schema({
         }
         
         try {
-          // This should only handle format conversion, not validation
+          // Handle string input (JSON, JS notation, or concatenated strings)
           if (typeof cards === 'string') {
             try {
-              // Just clean the string first, don't try to parse here
-              const cleanedString = cards.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
+              // Use our enhanced formatter that can handle multiple formats
+              const formattedDeck = ensureProperDeckFormat(cards);
               
-              // Use the formatter from imported utility
-              const formattedDeck = ensureProperDeckFormat(cleanedString);
-              console.log(`Deck formatted successfully via utility (${formattedDeck.length} cards)`);
-              return formattedDeck;
+              if (Array.isArray(formattedDeck) && formattedDeck.length > 0) {
+                console.log(`Deck formatted successfully via utility (${formattedDeck.length} cards)`);
+                
+                // Return properly formatted plain objects (not Mongoose documents)
+                return formattedDeck.map(card => ({
+                  id: String(card.id),
+                  name: String(card.name),
+                  skill: Number(card.skill),
+                  stamina: Number(card.stamina),
+                  aura: Number(card.aura),
+                  baseTotal: Number(card.baseTotal || 0),
+                  finalTotal: Number(card.finalTotal || 0),
+                  rarity: String(card.rarity || 'common'),
+                  character: String(card.character || ''),
+                  type: String(card.type || 'standard'),
+                  unlocked: Boolean(card.unlocked !== false)
+                }));
+              } else {
+                console.error("Failed to format deck data, returning empty array");
+                return [];
+              }
             } catch (stringError) {
               console.error("Error formatting string deck:", stringError);
               return [];

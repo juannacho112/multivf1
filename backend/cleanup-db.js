@@ -1,162 +1,126 @@
 /**
- * MongoDB cleanup script for VeeFriends games with malformed deck data
- * Run with: node cleanup-db.js
+ * Database cleanup utility for VeeFriends multiplayer
+ * Fixes deck data issues from MongoDB validation errors
  */
 
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
+import VeefriendsGame from './src/models/VeefriendsGame.js';
 import { ensureProperDeckFormat } from './src/utils/deckFormatter.js';
+import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
 
-// Connect to database
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log('MongoDB connected'))
-.catch(err => {
-  console.error('MongoDB connection error:', err);
-  process.exit(1);
-});
+// MongoDB connection
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => {
+    console.error('Failed to connect to MongoDB:', err);
+    process.exit(1);
+  });
 
-// Import VeefriendsGame model
-import VeefriendsGame from './src/models/VeefriendsGame.js';
-
-async function cleanup() {
+/**
+ * Clean up deck data in games collection
+ */
+async function cleanupDeckData() {
   try {
-    console.log('Starting VeeFriends games cleanup...');
-    
-    // Find all games
-    const games = await VeefriendsGame.find({});
-    console.log(`Found ${games.length} games to process`);
+    // Find games that might have issues
+    const games = await VeefriendsGame.find();
+    console.log(`Found ${games.length} games to check`);
     
     let fixedGames = 0;
-    let skippedGames = 0;
-    let errorGames = 0;
     
     // Process each game
     for (const game of games) {
-      try {
-        let gameFixed = false;
+      let gameWasFixed = false;
+      
+      // Check and fix players' deck data
+      for (let i = 0; i < game.players.length; i++) {
+        const player = game.players[i];
         
-        // Check and fix each player's deck
-        for (let i = 0; i < game.players.length; i++) {
-          const player = game.players[i];
+        // Check if deck needs fixing
+        if (player.deck) {
+          let needsFixing = false;
           
-          if (!player.deck) {
-            console.log(`Game ${game._id}: Player ${i+1} has no deck, initializing empty array`);
-            await VeefriendsGame.updateOne(
-              { _id: game._id },
-              { $set: { [`players.${i}.deck`]: [] } }
-            );
-            gameFixed = true;
-            continue;
-          }
-          
-          // Check if deck is a string instead of array
           if (typeof player.deck === 'string') {
-            console.log(`Game ${game._id}: Player ${i+1} has deck as string, fixing...`);
-            
-            try {
-              // Clean up and parse the deck
-              const cleanedString = player.deck.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
-              const formattedDeck = ensureProperDeckFormat(cleanedString);
-              
-              // Update with properly formatted deck
-              await VeefriendsGame.updateOne(
-                { _id: game._id },
-                { $set: { [`players.${i}.deck`]: formattedDeck } }
-              );
-              
-              console.log(`Game ${game._id}: Player ${i+1} deck fixed (${formattedDeck.length} cards)`);
-              gameFixed = true;
-            } catch (deckError) {
-              console.error(`Error fixing deck for game ${game._id}, player ${i+1}:`, deckError);
-              
-              // Reset to empty deck as last resort
-              await VeefriendsGame.updateOne(
-                { _id: game._id },
-                { $set: { [`players.${i}.deck`]: [] } }
-              );
-              console.log(`Game ${game._id}: Player ${i+1} deck reset to empty array`);
-              gameFixed = true;
-            }
-          } else if (Array.isArray(player.deck)) {
-            // Check if array contains valid card objects
-            let needsFormatting = false;
-            
+            console.log(`Game ${game._id}: Player ${i+1} has string deck, needs fixing`);
+            needsFixing = true;
+          } else if (Array.isArray(player.deck) && player.deck.length > 0) {
+            // Check if any card in the array is a string or has missing properties
             for (const card of player.deck) {
-              if (!card || typeof card !== 'object' || !card.id || typeof card.skill !== 'number') {
-                needsFormatting = true;
+              if (typeof card === 'string' || typeof card !== 'object' || card === null || 
+                  !card.id || !card.name || typeof card.skill !== 'number') {
+                console.log(`Game ${game._id}: Player ${i+1} has malformed deck cards, needs fixing`);
+                needsFixing = true;
                 break;
               }
             }
-            
-            if (needsFormatting) {
-              console.log(`Game ${game._id}: Player ${i+1} has malformed card objects, fixing...`);
+          }
+          
+          // Fix deck if needed
+          if (needsFixing) {
+            try {
+              // Get deck data in its current format
+              const rawDeck = player.deck;
               
-              // Format all cards properly
-              const formattedDeck = ensureProperDeckFormat(player.deck);
+              // Use our formatter to ensure proper structure
+              const formattedDeck = ensureProperDeckFormat(rawDeck);
               
-              await VeefriendsGame.updateOne(
-                { _id: game._id },
-                { $set: { [`players.${i}.deck`]: formattedDeck } }
-              );
-              
-              console.log(`Game ${game._id}: Player ${i+1} cards formatted correctly`);
-              gameFixed = true;
+              if (Array.isArray(formattedDeck) && formattedDeck.length > 0) {
+                // Explicitly create array of plain objects (not Mongoose documents)
+                const cleanDeck = formattedDeck.map(card => ({
+                  id: String(card.id),
+                  name: String(card.name),
+                  skill: Number(card.skill),
+                  stamina: Number(card.stamina),
+                  aura: Number(card.aura),
+                  baseTotal: Number(card.baseTotal || 0),
+                  finalTotal: Number(card.finalTotal || 0),
+                  rarity: String(card.rarity || 'common'),
+                  character: String(card.character || ''),
+                  type: String(card.type || 'standard'),
+                  unlocked: Boolean(card.unlocked !== false)
+                }));
+                
+                // Update directly in MongoDB to bypass Mongoose validation
+                await mongoose.connection.collection('veefriendsGames').updateOne(
+                  { _id: game._id, 'players._id': player._id },
+                  { $set: { [`players.${i}.deck`]: cleanDeck } }
+                );
+                
+                console.log(`Game ${game._id}: Fixed Player ${i+1}'s deck (${cleanDeck.length} cards)`);
+                gameWasFixed = true;
+              } else {
+                console.log(`Game ${game._id}: Could not format Player ${i+1}'s deck, setting to empty`);
+                
+                // Last resort - set empty deck
+                await mongoose.connection.collection('veefriendsGames').updateOne(
+                  { _id: game._id, 'players._id': player._id },
+                  { $set: { [`players.${i}.deck`]: [] } }
+                );
+                
+                gameWasFixed = true;
+              }
+            } catch (error) {
+              console.error(`Game ${game._id}: Error fixing Player ${i+1}'s deck:`, error);
             }
           }
         }
-        
-        // Fix game phase if needed
-        if (game.status === 'active' && game.phase === 'draw' && game.cardsInPlay) {
-          // If game is stuck in draw phase but has cards in play, move to challengerPick
-          if (game.cardsInPlay.player1 && game.cardsInPlay.player2) {
-            console.log(`Game ${game._id}: Found active game stuck in draw phase, moving to challengerPick`);
-            
-            await VeefriendsGame.updateOne(
-              { _id: game._id },
-              { 
-                $set: { 
-                  phase: 'challengerPick',
-                  availableAttributes: ['skill', 'stamina', 'aura'],
-                  challengeAttribute: null
-                } 
-              }
-            );
-            
-            gameFixed = true;
-          }
-        }
-        
-        if (gameFixed) {
-          fixedGames++;
-        } else {
-          skippedGames++;
-        }
-      } catch (gameError) {
-        console.error(`Error processing game ${game._id}:`, gameError);
-        errorGames++;
+      }
+      
+      if (gameWasFixed) {
+        fixedGames++;
       }
     }
     
-    console.log(`Cleanup complete.`);
-    console.log(`Fixed games: ${fixedGames}`);
-    console.log(`Skipped games (no issues found): ${skippedGames}`);
-    console.log(`Failed games (errors): ${errorGames}`);
-    
+    console.log(`Fixed ${fixedGames} games with deck data issues`);
   } catch (error) {
-    console.error('Cleanup error:', error);
+    console.error('Error cleaning up deck data:', error);
   } finally {
-    // Disconnect from database
-    await mongoose.disconnect();
-    console.log('MongoDB disconnected');
-    process.exit(0);
+    mongoose.connection.close();
+    console.log('MongoDB connection closed');
   }
 }
 
 // Run the cleanup
-cleanup();
+cleanupDeckData();

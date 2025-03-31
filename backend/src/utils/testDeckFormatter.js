@@ -1,118 +1,80 @@
 /**
- * Test script to verify the deckFormatter utility functions
+ * Test script for deckFormatter utility
+ * Tests handling of problematic string formats with newlines
  */
+
 import { ensureProperDeckFormat } from './deckFormatter.js';
 
-// Test cases
-console.log('\n==== TESTING DECK FORMATTER UTILITY ====\n');
-
-// Test Case 1: Properly formatted array of card objects
-console.log('Test Case 1: Properly formatted array of card objects');
-try {
-  const validCards = [
-    {
-      id: 'test1',
-      name: 'Test Card 1',
-      skill: 10,
-      stamina: 20,
-      aura: 30,
-      baseTotal: 60,
-      finalTotal: 60,
-      rarity: 'common',
-      character: 'Test Character 1',
-      type: 'standard',
-      unlocked: true
-    },
-    {
-      id: 'test2',
-      name: 'Test Card 2',
-      skill: 15,
-      stamina: 25,
-      aura: 35,
-      baseTotal: 75,
-      finalTotal: 75,
-      rarity: 'rare',
-      character: 'Test Character 2',
-      type: 'standard',
-      unlocked: true
-    }
-  ];
+// Test different formats
+function runTests() {
+  console.log('\n=== Testing Deck Formatter ===\n');
   
-  const result = ensureProperDeckFormat(validCards);
-  console.log(`✅ Success! Processed ${result.length} valid cards.`);
-} catch (error) {
-  console.error(`❌ Failed: ${error.message}`);
+  // Test 1: Normal JSON array
+  const test1 = '[{"id":"card1","name":"Test Card","skill":10,"stamina":10,"aura":10}]';
+  testFormatter('Test 1: Valid JSON', test1);
+  
+  // Test 2: Array with newlines
+  const test2 = `[
+    {"id":"card1","name":"Test Card","skill":10,"stamina":10,"aura":10}
+  ]`;
+  testFormatter('Test 2: JSON with newlines', test2);
+  
+  // Test 3: JavaScript object notation
+  const test3 = "[{id: 'card1', name: 'Test Card', skill: 10, stamina: 10, aura: 10}]";
+  testFormatter('Test 3: JavaScript notation', test3);
+  
+  // Test 4: The problematic concatenated string format from logs
+  const test4 = "[\\n' +\n" +
+    "  '  {\\n' +\n" +
+    "    \"id: 'card1',\\n\" +\n" +
+    "    \"name: 'Test Card',\\n\" +\n" +
+    "    '    skill: 10,\\n' +\n" +
+    "    '    stamina: 10,\\n' +\n" +
+    "    '    aura: 10,\\n' +\n" +
+    "    '    baseTotal: 30,\\n' +\n" +
+    "    '    finalTotal: 30,\\n' +\n" +
+    "    \"    rarity: 'common',\\n\" +\n" +
+    "    \"    character: 'Test',\\n\" +\n" +
+    "    \"    type: 'standard',\\n\" +\n" +
+    "    '    unlocked: true\\n' +\n" +
+    "    '  }\\n' +\n" +
+    "  ']";
+  testFormatter('Test 4: Concatenated string with newlines', test4);
+  
+  // Test 5: Bad data
+  const test5 = "This is not valid JSON or JS";
+  testFormatter('Test 5: Invalid data', test5);
+  
+  // Test 6: Empty string
+  const test6 = "";
+  testFormatter('Test 6: Empty string', test6);
+  
+  // Test 7: Already an array of objects
+  const test7 = [
+    {id: 'card1', name: 'Test Card 1', skill: 10, stamina: 10, aura: 10},
+    {id: 'card2', name: 'Test Card 2', skill: 20, stamina: 20, aura: 20}
+  ];
+  testFormatter('Test 7: Array of objects', test7);
+  
+  console.log('\n=== Testing Complete ===\n');
 }
 
-// Test Case 2: String with newlines
-console.log('\nTest Case 2: String with newlines');
-try {
-  const stringWithNewlines = `[\n  {\n    "id": "test1",\n    "name": "Test Card 1",\n    "skill": 10,\n    "stamina": 20,\n    "aura": 30,\n    "baseTotal": 60,\n    "finalTotal": 60,\n    "rarity": "common",\n    "character": "Test Character 1",\n    "type": "standard",\n    "unlocked": true\n  }\n]`;
+// Run test for a single case
+function testFormatter(testName, input) {
+  console.log(`\n--- ${testName} ---`);
+  console.log('Input:', typeof input === 'string' ? input.substring(0, 50) + '...' : input);
   
-  const result = ensureProperDeckFormat(stringWithNewlines);
-  console.log(`✅ Success! Processed ${result.length} cards from string with newlines.`);
-} catch (error) {
-  console.error(`❌ Failed: ${error.message}`);
-}
-
-// Test Case 3: Invalid card missing required properties
-console.log('\nTest Case 3: Invalid card missing required properties');
-try {
-  const invalidCards = [
-    {
-      id: 'test1',
-      name: 'Test Card 1'
-      // Missing skill, stamina, aura
+  try {
+    const result = ensureProperDeckFormat(input);
+    console.log('Success:', result.length, 'cards processed');
+    // Print first card as sample
+    if (result.length > 0) {
+      console.log('Sample card:', JSON.stringify(result[0], null, 2));
     }
-  ];
-  
-  const result = ensureProperDeckFormat(invalidCards);
-  console.log(`Result: ${result.length} cards after filtering invalid ones.`);
-  if (result.length === 0) {
-    console.log('✅ Success! Invalid card was properly filtered out.');
-  } else {
-    console.log('❌ Failed: Invalid card was not filtered out.');
+  } catch (error) {
+    console.error('Error:', error.message);
   }
-} catch (error) {
-  console.error(`❌ Failed: ${error.message}`);
 }
 
-// Test Case 4: The actual error from logs
-console.log('\nTest Case 4: Error scenario from logs');
-try {
-  const errorString = `[
-  {
-    id: '9pu9w3im4gcf2zkh5l4kib',
-    name: 'Balanced Bison',
-    skill: 18,
-    stamina: 18,
-    aura: 18,
-    baseTotal: 54,
-    finalTotal: 54,
-    rarity: 'common',
-    character: 'Bison',
-    type: 'standard',
-    unlocked: true
-  },
-  {
-    id: 'erolsyjkepgty8x106i52q',
-    name: 'Honest Hippopotamus',
-    skill: 13,
-    stamina: 20,
-    aura: 29,
-    baseTotal: 62,
-    finalTotal: 65,
-    rarity: 'rare',
-    character: 'Hippopotamus',
-    type: 'standard',
-    unlocked: true
-  }]`;
-  
-  const result = ensureProperDeckFormat(errorString);
-  console.log(`✅ Success! Processed ${result.length} cards from error scenario.`);
-  console.log('First card processed:', result[0]);
-} catch (error) {
-  console.error(`❌ Failed: ${error.message}`);
-}
-
-console.log('\n==== TEST COMPLETED ====\n');
+// Run all tests
+runTests();

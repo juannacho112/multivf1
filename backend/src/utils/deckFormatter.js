@@ -36,9 +36,18 @@ function parseStringDeckData(deckString) {
   }
   
   try {
-    // Try standard JSON parsing first
+    // Remove newlines and excessive whitespace
     const cleanedString = deckString.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
+    
+    // Handle string that looks like concatenated JavaScript (common in error logs)
+    const concatRegex = /\[\s*'\s*\{\s*\\n/;
+    if (concatRegex.test(cleanedString)) {
+      console.log('Detected concatenated string format, attempting special parsing');
+      return parseJavaScriptConcatenation(cleanedString);
+    }
+    
     try {
+      // Try standard JSON parsing first
       const jsonData = JSON.parse(cleanedString);
       return Array.isArray(jsonData) ? jsonData.map(formatCard) : [];
     } catch (jsonError) {
@@ -99,40 +108,89 @@ function parseStringDeckData(deckString) {
 }
 
 /**
+ * Special parser for strings that look like JavaScript concatenation expressions
+ * This handles the format seen in logs: "[\\n' + '  {\\n" +...
+ */
+function parseJavaScriptConcatenation(str) {
+  try {
+    // Remove the string concatenation artifacts
+    const cleaned = str
+      .replace(/\[\s*'\s*\{\s*\\n'\s*\+/g, '[{') // Fix start of array
+      .replace(/\s*\+\s*'\s*\}\s*\\n'\s*\+/g, '},{') // Fix between objects
+      .replace(/\s*\+\s*'\s*\}\s*\\n'\s*\+\s*'\s*\]/g, '}]') // Fix end of array
+      .replace(/\s*\+\s*'\s*\}\s*\]/g, '}]') // Alternative end format
+      .replace(/\s*\+\s*'/g, '') // Remove concatenation starts
+      .replace(/'\s*\+/g, '') // Remove concatenation ends
+      .replace(/\\n/g, '') // Remove newline escapes
+      .replace(/\\"/g, '"') // Fix escaped double quotes
+      .replace(/"\s*\+\s*"/g, '') // Remove empty string concatenations
+      // Fix property values enclosed in quotes
+      .replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3')
+      // Fix string values with single quotes
+      .replace(/:\s*'([^']*)'/g, ': "$1"');
+    
+    // Try to parse as JSON after cleaning
+    try {
+      const result = JSON.parse(cleaned);
+      if (Array.isArray(result)) {
+        return result.map(formatCard);
+      }
+    } catch (err) {
+      console.log('Failed to parse cleaned concatenated string:', err);
+      
+      // Last resort: try to extract card objects individually
+      return parseManual(cleaned);
+    }
+  } catch (error) {
+    console.error('Error parsing concatenated string:', error);
+    return [];
+  }
+  
+  return [];
+}
+
+/**
  * A very simple manual parser for array of objects notation
  * This is a last resort for malformed strings
  */
 function parseManual(str) {
   const cards = [];
-  let currentCard = {};
-  let inArray = false;
-  let inObject = false;
-  let currentProperty = '';
-  let currentValue = '';
   
   // Super simplified parsing - just extract what looks like valid cards
-  const matches = str.matchAll(/\{\s*id\s*:\s*['"]([^'"]+)['"]/g);
+  const matches = str.matchAll(/\{\s*['"]{0,1}id['"]{0,1}\s*:\s*['"]([^'"]+)['"]/g);
   
   for (const match of matches) {
     try {
       const cardStartIndex = match.index;
-      const cardEndIndex = str.indexOf('}', cardStartIndex);
+      // Find the matching closing brace - naive approach
+      let cardEndIndex = -1;
+      let openBraces = 0;
+      
+      for (let i = cardStartIndex; i < str.length; i++) {
+        if (str[i] === '{') openBraces++;
+        else if (str[i] === '}') {
+          openBraces--;
+          if (openBraces === 0) {
+            cardEndIndex = i;
+            break;
+          }
+        }
+      }
       
       if (cardEndIndex > cardStartIndex) {
         const cardString = str.substring(cardStartIndex, cardEndIndex + 1);
         
         // Extract key values using regex
-        const id = (cardString.match(/id\s*:\s*['"]([^'"]+)['"]/)?.[1]) || generateId();
-        const name = (cardString.match(/name\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'Unknown Card';
-        const skill = parseInt((cardString.match(/skill\s*:\s*(\d+)/)?.[1]) || '10');
-        const stamina = parseInt((cardString.match(/stamina\s*:\s*(\d+)/)?.[1]) || '10');
-        const aura = parseInt((cardString.match(/aura\s*:\s*(\d+)/)?.[1]) || '10');
-        const rarity = (cardString.match(/rarity\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'common';
-        const character = (cardString.match(/character\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'Unknown';
-        const type = (cardString.match(/type\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'standard';
-        
-        const baseTotal = skill + stamina + aura;
-        const finalTotal = baseTotal;
+        const id = (cardString.match(/id['"]{0,1}\s*:\s*['"]([^'"]+)['"]/)?.[1]) || generateId();
+        const name = (cardString.match(/name['"]{0,1}\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'Unknown Card';
+        const skill = parseInt((cardString.match(/skill['"]{0,1}\s*:\s*(\d+)/)?.[1]) || '10');
+        const stamina = parseInt((cardString.match(/stamina['"]{0,1}\s*:\s*(\d+)/)?.[1]) || '10');
+        const aura = parseInt((cardString.match(/aura['"]{0,1}\s*:\s*(\d+)/)?.[1]) || '10');
+        const baseTotal = parseInt((cardString.match(/baseTotal['"]{0,1}\s*:\s*(\d+)/)?.[1]) || (skill + stamina + aura).toString());
+        const finalTotal = parseInt((cardString.match(/finalTotal['"]{0,1}\s*:\s*(\d+)/)?.[1]) || baseTotal.toString());
+        const rarity = (cardString.match(/rarity['"]{0,1}\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'common';
+        const character = (cardString.match(/character['"]{0,1}\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'Unknown';
+        const type = (cardString.match(/type['"]{0,1}\s*:\s*['"]([^'"]+)['"]/)?.[1]) || 'standard';
         
         cards.push({
           id,
@@ -159,6 +217,7 @@ function parseManual(str) {
 
 /**
  * Formats a card object to ensure all required fields are present
+ * and properly typed
  */
 function formatCard(card) {
   if (!card || typeof card !== 'object') {
@@ -169,17 +228,18 @@ function formatCard(card) {
   const skill = typeof card.skill === 'number' ? card.skill : parseInt(card.skill) || 10;
   const stamina = typeof card.stamina === 'number' ? card.stamina : parseInt(card.stamina) || 10;
   const aura = typeof card.aura === 'number' ? card.aura : parseInt(card.aura) || 10;
-  const baseTotal = card.baseTotal || (skill + stamina + aura);
-  const finalTotal = card.finalTotal || baseTotal;
+  const baseTotal = Number(card.baseTotal) || (skill + stamina + aura);
+  const finalTotal = Number(card.finalTotal) || baseTotal;
   
+  // Return a clean plain object (not a Mongoose document)
   return {
     id: String(card.id || generateId()),
     name: String(card.name || 'Unknown Card'),
-    skill: skill,
-    stamina: stamina,
-    aura: aura,
-    baseTotal: baseTotal,
-    finalTotal: finalTotal,
+    skill: Number(skill),
+    stamina: Number(stamina),
+    aura: Number(aura),
+    baseTotal: Number(baseTotal),
+    finalTotal: Number(finalTotal),
     rarity: String(card.rarity || 'common'),
     character: String(card.character || 'Unknown'),
     type: String(card.type || 'standard'),
