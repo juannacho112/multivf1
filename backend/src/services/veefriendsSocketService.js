@@ -934,53 +934,104 @@ const startGame = async (io, game) => {
     
     // Start the first round by preparing the game state
     try {
-      // Initialize with proper game state - we're going directly to challengerPick phase
-      // instead of using processGameAction to avoid any issues
+    // Ensure the game is properly refreshed after all deck updates
+    // This is critical to get the latest deck data
+    console.log(`Reloading game ${gameId} to ensure latest deck data is available`);
+    game = await VeefriendsGame.findById(gameId);
+    
+    if (!game) {
+      throw new Error(`Game ${gameId} not found after deck setup`);
+    }
+    
+    // Log exact deck lengths to aid debugging
+    const player1DeckLength = Array.isArray(game.players[0]?.deck) ? game.players[0].deck.length : 0;
+    const player2DeckLength = Array.isArray(game.players[1]?.deck) ? game.players[1].deck.length : 0;
+    
+    console.log(`Player 1 deck has ${player1DeckLength} cards after reload`);
+    console.log(`Player 2 deck has ${player2DeckLength} cards after reload`);
+    
+    // Initialize with proper game state - we're going directly to challengerPick phase
+    // instead of using processGameAction to avoid any issues
+    
+    // Make sure both players have cards in their decks
+    if (player1DeckLength > 0 && player2DeckLength > 0) {
+      console.log("Both players have cards, setting up initial game state");
       
-      // Make sure both players have cards in their decks
-      if ((game.players[0].deck && game.players[0].deck.length > 0) && 
-          (game.players[1].deck && game.players[1].deck.length > 0)) {
+      // Get the first cards for both players
+      const player1Card = game.players[0].deck[0];
+      const player2Card = game.players[1].deck[0];
+      
+      console.log(`Player 1 first card: ${player1Card?.id || 'unknown'} (${player1Card?.name || 'Unknown'})`);
+      console.log(`Player 2 first card: ${player2Card?.id || 'unknown'} (${player2Card?.name || 'Unknown'})`);
+      
+      // Create the updated decks (removing the first card)
+      const player1Deck = [...game.players[0].deck.slice(1)];
+      const player2Deck = [...game.players[1].deck.slice(1)];
+      
+      // Set up the initial game state
+      const gameStateUpdate = {
+        status: 'active',
+        phase: 'challengerPick', // Start with challenger pick phase
+        cardsInPlay: {
+          player1: player1Card,
+          player2: player2Card
+        },
+        'players.0.deck': player1Deck,
+        'players.1.deck': player2Deck,
+        currentChallenger: 'player1',
+        deniedAttributes: [],
+        availableAttributes: ['skill', 'stamina', 'aura'],
+        challengeAttribute: null,
+        potSize: 1,
+        roundNumber: 1
+      };
+      
+      // Update the game state directly in MongoDB
+      await VeefriendsGame.updateOne(
+        { _id: gameId },
+        { $set: gameStateUpdate }
+      );
+      
+      console.log(`Game initialized successfully for game ${gameId}. Cards in play set.`);
+    } else {
+      console.error(`Cannot start game - one or both players are missing their deck!`);
+      
+      // Try to log deck information
+      console.log(`Player 1 deck: ${player1DeckLength} cards`);
+      console.log(`Player 2 deck: ${player2DeckLength} cards`);
+      
+      // Try emergency deck generation directly in MongoDB
+      const db = getMongoDb(mongoose);
+      let emergencyFixApplied = false;
+      
+      if (db) {
+        console.log("Attempting emergency deck generation directly in MongoDB");
         
-        // Get the first cards for both players
-        const player1Card = game.players[0].deck[0];
-        const player2Card = game.players[1].deck[0];
-        
-        // Create the updated decks (removing the first card)
-        const player1Deck = [...game.players[0].deck.slice(1)];
-        const player2Deck = [...game.players[1].deck.slice(1)];
-        
-        // Set up the initial game state
-        const gameStateUpdate = {
-          status: 'active',
-          phase: 'challengerPick', // Start with challenger pick phase
-          cardsInPlay: {
-            player1: player1Card,
-            player2: player2Card
-          },
-          'players.0.deck': player1Deck,
-          'players.1.deck': player2Deck,
-          currentChallenger: 'player1',
-          deniedAttributes: [],
-          availableAttributes: ['skill', 'stamina', 'aura'],
-          challengeAttribute: null,
-          potSize: 1,
-          roundNumber: 1
-        };
-        
-        // Update the game state directly in MongoDB
-        await VeefriendsGame.updateOne(
-          { _id: gameId },
-          { $set: gameStateUpdate }
-        );
-        
-        console.log(`Game initialized successfully for game ${gameId}. Cards in play set.`);
-      } else {
-        console.error(`Cannot start game - one or both players are missing their deck!`);
-        
-        // Try to log deck information
-        console.log(`Player 1 deck: ${game.players[0].deck?.length || 0} cards`);
-        console.log(`Player 2 deck: ${game.players[1].deck?.length || 0} cards`);
-        
+        try {
+          const { generateRandomDeck, fullCardPool } = await import('../utils/cardUtils.js');
+          const emergencyDeck = generateRandomDeck(fullCardPool, 10); // Smaller deck for emergency
+          
+          // Apply to both players if needed
+          if (player1DeckLength === 0) {
+            await fixDeckStorage(db, gameId.toString(), 0, emergencyDeck);
+            console.log("Applied emergency deck to player 1");
+          }
+          
+          if (player2DeckLength === 0) {
+            await fixDeckStorage(db, gameId.toString(), 1, emergencyDeck);
+            console.log("Applied emergency deck to player 2");
+          }
+          
+          emergencyFixApplied = true;
+          
+          // Reload the game again after emergency fix
+          game = await VeefriendsGame.findById(gameId);
+        } catch (emergencyError) {
+          console.error("Emergency deck generation failed:", emergencyError);
+        }
+      }
+      
+      if (!emergencyFixApplied) {
         // Set a default state that won't break the UI
         await VeefriendsGame.updateOne(
           { _id: gameId },
@@ -993,7 +1044,48 @@ const startGame = async (io, game) => {
             }
           }
         );
+        
+        console.log("Set default game state without cards as fallback");
+      } else {
+        console.log("Emergency fix applied, setting up game with emergency decks");
+        
+        // Setup initial game state with emergency decks
+        if (game?.players?.[0]?.deck?.length > 0 && game?.players?.[1]?.deck?.length > 0) {
+          const player1Card = game.players[0].deck[0];
+          const player2Card = game.players[1].deck[0];
+          
+          // Create the updated decks (removing the first card)
+          const player1Deck = [...game.players[0].deck.slice(1)];
+          const player2Deck = [...game.players[1].deck.slice(1)];
+          
+          // Set up the initial game state
+          const gameStateUpdate = {
+            status: 'active',
+            phase: 'challengerPick', // Start with challenger pick phase
+            cardsInPlay: {
+              player1: player1Card,
+              player2: player2Card
+            },
+            'players.0.deck': player1Deck,
+            'players.1.deck': player2Deck,
+            currentChallenger: 'player1',
+            deniedAttributes: [],
+            availableAttributes: ['skill', 'stamina', 'aura'],
+            challengeAttribute: null,
+            potSize: 1,
+            roundNumber: 1
+          };
+          
+          // Update the game state directly in MongoDB
+          await VeefriendsGame.updateOne(
+            { _id: gameId },
+            { $set: gameStateUpdate }
+          );
+          
+          console.log("Game initialized with emergency deck cards successfully!");
+        }
       }
+    }
     } catch (error) {
       console.error('Error processing first draw:', error);
       

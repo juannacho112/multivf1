@@ -340,6 +340,8 @@ VeefriendsGameSchema.methods.getGameState = function() {
       isGuest: player.isGuest,
       isReady: player.isReady,
       deckSize: Array.isArray(player.deck) ? player.deck.length : 0,
+      // Include first 5 cards of deck for UI preview (do not send the entire deck for performance)
+      deck: Array.isArray(player.deck) ? player.deck.slice(0, 5) : [],
       points: player.points,
       terrificTokenUsed: player.terrificTokenUsed
     })),

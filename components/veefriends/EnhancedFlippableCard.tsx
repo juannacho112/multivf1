@@ -88,11 +88,34 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
   });
 
   const renderCardFront = () => {
+    // Debug logging to help identify issues with card data
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[EnhancedFlippableCard] Rendering card:`, card ? 
+        `${card.name} (${card.id})` : 'null/undefined');
+    }
+    
     if (!card) {
       // Show empty card design for missing cards
       return (
         <View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint }]}>
           <ThemedText type="subtitle" style={styles.emptyCardText}>Waiting...</ThemedText>
+        </View>
+      );
+    }
+
+    // Additional validation to handle malformed card data
+    const isValidCard = card && 
+      typeof card === 'object' && 
+      'name' in card && 
+      'skill' in card && 
+      'stamina' in card && 
+      'aura' in card;
+
+    if (!isValidCard) {
+      console.error('[EnhancedFlippableCard] Invalid card data:', card);
+      return (
+        <View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint }]}>
+          <ThemedText type="subtitle" style={styles.emptyCardText}>Invalid Card</ThemedText>
         </View>
       );
     }

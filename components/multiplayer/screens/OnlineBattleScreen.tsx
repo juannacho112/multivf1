@@ -302,6 +302,14 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
     }
   }
 
+  // Debug game state
+  console.log(`[OnlineBattleScreen] Current game state:`, {
+    phase: activeGame.phase,
+    cardsInPlay: JSON.stringify(activeGame.cardsInPlay || {}),
+    player1Cards: activeGame.players[0]?.deck?.length || 0,
+    player2Cards: activeGame.players[1]?.deck?.length || 0
+  });
+
   // Format player data for the UI components
   const player1 = {
     name: activeGame.players[0]?.username || 'Player 1',
@@ -320,6 +328,9 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
     // Add deck property to fix PlayerScoreboard error
     deck: activeGame.players[1]?.deck || []
   };
+
+  // Ensure cardsInPlay has valid structure
+  const cardsInPlay = activeGame.cardsInPlay || { player1: null, player2: null };
 
   // Add debugging to check button visibility
   console.log(`Game phase: ${activeGame.phase}`);
