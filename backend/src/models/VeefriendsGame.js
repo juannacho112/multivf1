@@ -1,146 +1,191 @@
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
-import { ensureProperDeckFormat } from '../utils/deckFormatter.js';
 
-const veefriendsGameSchema = new mongoose.Schema({
+// Card schema
+const CardSchema = new mongoose.Schema({
+  id: {
+    type: String,
+    required: true
+  },
+  name: {
+    type: String,
+    required: true
+  },
+  skill: {
+    type: Number,
+    required: true
+  },
+  stamina: {
+    type: Number,
+    required: true
+  },
+  aura: {
+    type: Number,
+    required: true
+  },
+  baseTotal: {
+    type: Number,
+    required: true
+  },
+  finalTotal: {
+    type: Number,
+    required: true
+  },
+  rarity: {
+    type: String,
+    required: true
+  },
+  character: {
+    type: String,
+    required: true
+  },
+  type: {
+    type: String,
+    required: true
+  },
+  unlocked: {
+    type: Boolean,
+    default: true
+  }
+});
+
+// Points schema
+const PointsSchema = new mongoose.Schema({
+  skill: {
+    type: Number,
+    default: 0
+  },
+  stamina: {
+    type: Number,
+    default: 0
+  },
+  aura: {
+    type: Number,
+    default: 0
+  }
+});
+
+// Player schema
+const PlayerSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: function() { return !this.isGuest; } // Only required if not a guest
+  },
+  username: {
+    type: String,
+    required: true
+  },
+  displayName: {
+    type: String
+  },
+  isGuest: {
+    type: Boolean,
+    default: false
+  },
+  isReady: {
+    type: Boolean,
+    default: false
+  },
+  deck: {
+    type: [],
+    default: [],
+    set: function(cards) {
+      // If the cards are passed as a stringified array, parse it
+      if (typeof cards === 'string') {
+        try {
+          // Clean up newlines and whitespace that cause MongoDB validation issues
+          const cleanedString = cards.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
+          
+          // Handle JS string concatenation pattern in the error
+          if (cleanedString.includes("' +")) {
+            return []; // Return empty array if we detect concatenation strings
+          }
+          
+          // Parse the cleaned string
+          return JSON.parse(cleanedString);
+        } catch (e) {
+          console.error("Error parsing cards string:", e);
+          return [];
+        }
+      }
+      
+      // If already an array, just return it
+      if (Array.isArray(cards)) {
+        return cards;
+      }
+      
+      // For anything else, return empty array to avoid errors
+      console.error("Unexpected deck data type:", typeof cards);
+      return [];
+    }
+  },
+  points: {
+    type: PointsSchema,
+    default: {
+      skill: 0,
+      stamina: 0,
+      aura: 0
+    }
+  },
+  terrificTokenUsed: {
+    type: Boolean,
+    default: false
+  }
+});
+
+// VeeFriends Game schema
+const VeefriendsGameSchema = new mongoose.Schema({
   gameCode: {
     type: String,
     required: true,
     unique: true,
     default: () => {
-      // Generate a short, readable game code (6 characters)
-      const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      let result = '';
-      for (let i = 0; i < 6; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
-      }
-      return result;
+      // Generate 6-character alphanumeric code
+      return Math.random().toString(36).substring(2, 8).toUpperCase();
     }
+  },
+  players: {
+    type: [PlayerSchema],
+    default: []
   },
   status: {
     type: String,
     enum: ['waiting', 'active', 'completed', 'abandoned'],
     default: 'waiting'
   },
-  players: [{
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    username: String,
-    displayName: String,
-    isReady: {
-      type: Boolean,
-      default: false
-    },
-    isGuest: {
-      type: Boolean,
-      default: false
-    },
-    deck: {
-      type: [{
-        id: String,
-        name: String,
-        skill: Number,
-        stamina: Number,
-        aura: Number,
-        baseTotal: Number,
-        finalTotal: Number,
-        rarity: String,
-        character: String,
-        type: String,
-        unlocked: Boolean
-      }],
-      default: [],
-      // Enhanced setter function to handle various input formats
-      set: function(cards) {
-        // If it's already an array of objects, return as is to avoid processing twice
-        if (Array.isArray(cards) && cards.length > 0 && typeof cards[0] === 'object') {
-          console.log(`Deck already in array format (${cards.length} cards)`);
-          return cards;
-        }
-        
-        try {
-          // Handle string input (JSON, JS notation, or concatenated strings)
-          if (typeof cards === 'string') {
-            try {
-              // Use our enhanced formatter that can handle multiple formats
-              const formattedDeck = ensureProperDeckFormat(cards);
-              
-              if (Array.isArray(formattedDeck) && formattedDeck.length > 0) {
-                console.log(`Deck formatted successfully via utility (${formattedDeck.length} cards)`);
-                
-                // Return properly formatted plain objects (not Mongoose documents)
-                return formattedDeck.map(card => ({
-                  id: String(card.id),
-                  name: String(card.name),
-                  skill: Number(card.skill),
-                  stamina: Number(card.stamina),
-                  aura: Number(card.aura),
-                  baseTotal: Number(card.baseTotal || 0),
-                  finalTotal: Number(card.finalTotal || 0),
-                  rarity: String(card.rarity || 'common'),
-                  character: String(card.character || ''),
-                  type: String(card.type || 'standard'),
-                  unlocked: Boolean(card.unlocked !== false)
-                }));
-              } else {
-                console.error("Failed to format deck data, returning empty array");
-                return [];
-              }
-            } catch (stringError) {
-              console.error("Error formatting string deck:", stringError);
-              return [];
-            }
-          }
-          return cards;
-        } catch (e) {
-          console.error("Error in deck setter:", e);
-          return [];
-        }
-      },
-      // Tell Mongoose not to worry about exact type matching for array items
-      _id: false
-    },
-    points: {
-      skill: {
-        type: Number,
-        default: 0
-      },
-      stamina: {
-        type: Number,
-        default: 0
-      },
-      aura: {
-        type: Number,
-        default: 0
-      }
-    },
-    terrificTokenUsed: {
-      type: Boolean,
-      default: false
-    }
-  }],
-  // Cards in play
-  cardsInPlay: {
-    player1: {
-      type: Object,
-      default: null
-    },
-    player2: {
-      type: Object,
-      default: null
-    }
-  },
-  // Game state
   phase: {
     type: String,
     enum: ['draw', 'challengerPick', 'acceptDeny', 'resolve', 'gameOver'],
     default: 'draw'
   },
+  cardsInPlay: {
+    type: Object,
+    default: {
+      player1: null,
+      player2: null
+    }
+  },
+  roundNumber: {
+    type: Number,
+    default: 1
+  },
+  potSize: {
+    type: Number,
+    default: 1
+  },
+  burnPile: {
+    type: Array,
+    default: []
+  },
+  winner: {
+    type: String,
+    enum: ['player1', 'player2', null],
+    default: null
+  },
   currentChallenger: {
     type: String,
-    enum: ['player1', 'player2'],
+    enum: ['player1', 'player2', null],
     default: 'player1'
   },
   challengeAttribute: {
@@ -156,76 +201,42 @@ const veefriendsGameSchema = new mongoose.Schema({
     type: [String],
     default: ['skill', 'stamina', 'aura']
   },
-  burnPile: {
-    type: [Object],
-    default: []
-  },
-  roundNumber: {
-    type: Number,
-    default: 1
-  },
-  potSize: {
-    type: Number,
-    default: 1
-  },
-  winner: {
-    type: String,
-    enum: ['player1', 'player2', null],
-    default: null
-  },
   isPrivate: {
     type: Boolean,
     default: false
   },
-  logs: [{
-    message: String,
-    timestamp: {
-      type: Date,
-      default: Date.now
-    }
-  }],
-  lastActivity: {
-    type: Date,
-    default: Date.now
-  },
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
-}, {
-  timestamps: true
 });
 
-// Index for looking up games by code
-veefriendsGameSchema.index({ gameCode: 1 });
-// Index for finding active games
-veefriendsGameSchema.index({ status: 1 });
-// Index for recent games
-veefriendsGameSchema.index({ lastActivity: -1 });
+// Update the updatedAt field on save
+VeefriendsGameSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
 
-// Helper method to add a player to the game
-veefriendsGameSchema.methods.addPlayer = function(user, isGuest = false) {
-  // Check if game is full
+// Method to add a player to the game
+VeefriendsGameSchema.methods.addPlayer = async function(user, isGuest = false) {
   if (this.players.length >= 2) {
-    throw new Error('Game is full');
+    throw new Error('Game already has maximum players');
   }
   
-  // Check if player is already in game
-  const existingPlayer = this.players.find(p => 
-    user._id && p.userId && p.userId.toString() === user._id.toString()
-  );
-  
-  if (existingPlayer) {
-    throw new Error('Player is already in the game');
+  if (this.status !== 'waiting') {
+    throw new Error('Game already started');
   }
-
-  // Generate player data
-  const playerData = {
+  
+  this.players.push({
     userId: isGuest ? null : user._id,
     username: user.username,
     displayName: user.displayName || user.username,
+    isGuest,
     isReady: false,
-    isGuest: isGuest,
     deck: [],
     points: {
       skill: 0,
@@ -233,89 +244,46 @@ veefriendsGameSchema.methods.addPlayer = function(user, isGuest = false) {
       aura: 0
     },
     terrificTokenUsed: false
-  };
+  });
   
-  // Add the player
-  this.players.push(playerData);
-  
-  return this;
+  return this.save();
 };
 
-// Helper method to check if game is ready to start
-veefriendsGameSchema.methods.isReadyToStart = function() {
-  if (this.players.length !== 2) return false;
-  
-  return this.players.every(player => player.isReady);
+// Method to check if all players are ready
+VeefriendsGameSchema.methods.isReadyToStart = function() {
+  return this.players.length === 2 && this.players.every(p => p.isReady);
 };
 
-// Helper method to get game summary (public data)
-veefriendsGameSchema.methods.getGameSummary = function() {
+// Method to get formatted game state for sending to clients
+VeefriendsGameSchema.methods.getGameState = function() {
+  // Return a cleaned up version of the game state
   return {
     id: this._id,
     gameCode: this.gameCode,
     status: this.status,
     phase: this.phase,
-    currentChallenger: this.currentChallenger,
-    challengeAttribute: this.challengeAttribute,
-    roundNumber: this.roundNumber,
-    potSize: this.potSize,
     players: this.players.map(player => ({
       userId: player.userId,
       username: player.username,
       displayName: player.displayName,
-      isReady: player.isReady,
       isGuest: player.isGuest,
+      isReady: player.isReady,
+      deckSize: Array.isArray(player.deck) ? player.deck.length : 0,
       points: player.points,
-      terrificTokenUsed: player.terrificTokenUsed,
-      deckCount: player.deck.length
+      terrificTokenUsed: player.terrificTokenUsed
     })),
-    winner: this.winner,
-    isPrivate: this.isPrivate,
-    createdAt: this.createdAt,
-    lastActivity: this.lastActivity
-  };
-};
-
-// Helper method to get the full game state for players
-veefriendsGameSchema.methods.getGameState = function() {
-  return {
-    id: this._id,
-    gameCode: this.gameCode,
-    status: this.status,
-    phase: this.phase,
+    cardsInPlay: this.cardsInPlay,
+    roundNumber: this.roundNumber,
+    potSize: this.potSize,
     currentChallenger: this.currentChallenger,
     challengeAttribute: this.challengeAttribute,
     deniedAttributes: this.deniedAttributes,
     availableAttributes: this.availableAttributes,
-    cardsInPlay: this.cardsInPlay,
-    burnPile: this.burnPile ? this.burnPile.slice(0, 10) : [], // Only send the last 10 burned cards for performance
-    roundNumber: this.roundNumber,
-    potSize: this.potSize,
-    players: this.players.map((player, index) => {
-      // Create player state with essential information
-      const playerState = {
-        userId: player.userId,
-        username: player.username,
-        displayName: player.displayName,
-        isReady: player.isReady,
-        isGuest: player.isGuest,
-        points: player.points,
-        terrificTokenUsed: player.terrificTokenUsed,
-        deckCount: player.deck ? player.deck.length : 0,
-        // Include the top card of the player's deck (for draw animations)
-        topCard: player.deck && player.deck.length > 0 ? player.deck[0] : null,
-        // Include the player's actual position for UI purposes
-        position: index === 0 ? 'player1' : 'player2'
-      };
-      
-      return playerState;
-    }),
-    // Always include winner field, null if no winner yet
-    winner: this.winner || null
+    winner: this.winner
   };
 };
 
-// Create model
-const VeefriendsGame = mongoose.model('VeefriendsGame', veefriendsGameSchema);
+// Create model from schema
+const VeefriendsGame = mongoose.model('VeefriendsGame', VeefriendsGameSchema, 'veefriendsGames');
 
 export default VeefriendsGame;
