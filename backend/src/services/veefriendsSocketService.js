@@ -802,9 +802,9 @@ const startGame = async (io, game) => {
     // Initialize player decks if not already set
     for (let i = 0; i < game.players.length; i++) {
       try {
-        // Check if player already has a valid deck
-        const existingDeck = await getPlayerDeck(gameId, i);
-        if (existingDeck && existingDeck.length > 0) {
+        // Get player's deck directly from the game object
+        const existingDeck = game.players[i]?.deck;
+        if (existingDeck && Array.isArray(existingDeck) && existingDeck.length > 0) {
           console.log(`Player ${i+1} already has a valid deck with ${existingDeck.length} cards`);
           continue; // Skip to next player if this one has a deck
         }
