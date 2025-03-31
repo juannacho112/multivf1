@@ -95,8 +95,13 @@ const tryParseJSConcatenation = (input) => {
     
     // First check if this looks like concatenated strings
     if (input.includes("' +") || input.includes("\" +")) {
+      console.log("[DeckFormatter] Handling JS concatenated string format");
+      
+      // If the input has backslashes before quotes, double them to avoid escaping issues
+      let workingStr = input.replace(/\\(['"\\])/g, '\\\\$1');
+      
       // Replace JS string concatenation artifacts
-      let cleanedStr = input
+      let cleanedStr = workingStr
         .replace(/['"]\s*\+\s*['"]/g, '') // Remove quotes around + operators
         .replace(/\\n/g, '')              // Remove escaped newlines
         .replace(/\\'/g, "'")             // Unescape quotes
