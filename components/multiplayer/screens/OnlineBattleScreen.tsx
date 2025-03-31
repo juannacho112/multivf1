@@ -307,19 +307,25 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
     name: activeGame.players[0]?.username || 'Player 1',
     points: activeGame.players[0]?.points || { skill: 0, stamina: 0, aura: 0 },
     terrificTokenUsed: activeGame.players[0]?.terrificTokenUsed || false,
-    deckCount: activeGame.players[0]?.deckCount || 0,
+    deckCount: activeGame.players[0]?.deckSize || 0,
     // Add deck property to fix PlayerScoreboard error
-    deck: [] // Empty array as a safe default
+    deck: activeGame.players[0]?.deck || [] 
   };
 
   const player2 = {
     name: activeGame.players[1]?.username || 'Player 2',
     points: activeGame.players[1]?.points || { skill: 0, stamina: 0, aura: 0 },
     terrificTokenUsed: activeGame.players[1]?.terrificTokenUsed || false,
-    deckCount: activeGame.players[1]?.deckCount || 0,
+    deckCount: activeGame.players[1]?.deckSize || 0,
     // Add deck property to fix PlayerScoreboard error
-    deck: [] // Empty array as a safe default
+    deck: activeGame.players[1]?.deck || []
   };
+
+  // Add debugging to check button visibility
+  console.log(`Game phase: ${activeGame.phase}`);
+  console.log(`Current challenger: ${activeGame.currentChallenger}`);
+  console.log(`Current position: ${currentPosition}`);
+  console.log(`Is current challenger: ${isCurrentChallenger}`);
 
   return (
     <View style={[
