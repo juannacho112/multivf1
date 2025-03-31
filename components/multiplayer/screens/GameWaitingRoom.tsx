@@ -196,16 +196,16 @@ export const GameWaitingRoom: React.FC<GameWaitingRoomProps> = ({ onBack }) => {
           • Both players must be ready to start the game
         </Text>
         <Text style={styles.infoText}>
-          • Each player starts with 3 energy and a hand of cards
+          • Cards have skill, stamina, and aura attributes
         </Text>
         <Text style={styles.infoText}>
-          • Play cards from your hand to the field
+          • Players take turns as challenger to pick an attribute to compete on
         </Text>
         <Text style={styles.infoText}>
-          • Use card abilities to attack your opponent's cards
+          • Points are awarded based on winning challenges
         </Text>
         <Text style={styles.infoText}>
-          • Win by defeating all of your opponent's cards
+          • First player to reach 7 points in any attribute wins!
         </Text>
       </View>
       

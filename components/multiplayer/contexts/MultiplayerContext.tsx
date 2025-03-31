@@ -758,14 +758,25 @@ export const MultiplayerProvider: React.FC<{children: ReactNode}> = ({ children 
    * Select attribute for challenge (Veefriends specific)
    */
   const selectAttribute = (attribute: string, useTerrificToken?: boolean) => {
-    if (!activeGame?.gameId) return;
+    if (!activeGame?.gameId) {
+      console.warn('Cannot select attribute: No active game');
+      return;
+    }
     
-    console.log(`Selecting attribute: ${attribute}, terrific token: ${useTerrificToken ? 'yes' : 'no'}`);
-    socketService.sendToServer('game:action', {
-      gameId: activeGame.gameId,
-      action: 'selectAttribute',
-      payload: { attribute, useTerrificToken }
-    });
+    console.log(`[MultiplayerContext] Selecting attribute: ${attribute}, terrific token: ${useTerrificToken ? 'yes' : 'no'}`);
+    console.log(`[MultiplayerContext] Game ID: ${activeGame.gameId}, Game Phase: ${activeGame.phase}`);
+    console.log(`[MultiplayerContext] Current challenger: ${activeGame.currentChallenger}`);
+    
+    try {
+      socketService.sendToServer('game:action', {
+        gameId: activeGame.gameId,
+        action: 'selectAttribute',
+        payload: { attribute, useTerrificToken }
+      });
+      console.log('[MultiplayerContext] Attribute selection sent to server');
+    } catch (error) {
+      console.error('[MultiplayerContext] Error sending attribute selection:', error);
+    }
   };
   
   /**

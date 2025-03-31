@@ -440,15 +440,18 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
         <View style={styles.controlsSection}>
           {/* Player controls */}
           {activeGame.phase === 'challengerPick' && isCurrentChallenger && (
-            <AttributeSelector 
-              availableAttributes={activeGame.availableAttributes || ['skill', 'stamina', 'aura']}
-              deniedAttributes={activeGame.deniedAttributes || []}
-              challengeAttribute={activeGame.challengeAttribute}
-              terrificTokenUsed={isPlayer1 ? player1.terrificTokenUsed : player2.terrificTokenUsed}
-              isSmallScreen={isSmallScreen}
-              colors={colors}
-              onSelectAttribute={selectAttribute}
-            />
+          <AttributeSelector 
+            availableAttributes={activeGame.availableAttributes || ['skill', 'stamina', 'aura']}
+            deniedAttributes={activeGame.deniedAttributes || []}
+            challengeAttribute={activeGame.challengeAttribute}
+            terrificTokenUsed={isPlayer1 ? player1.terrificTokenUsed : player2.terrificTokenUsed}
+            isSmallScreen={isSmallScreen}
+            colors={colors}
+            onSelectAttribute={(attribute, useTerrificToken = false) => {
+              console.log(`Selecting attribute: ${attribute}, terrific token: ${useTerrificToken}`);
+              selectAttribute(attribute, useTerrificToken);
+            }}
+          />
           )}
           
           {activeGame.phase === 'acceptDeny' && !isCurrentChallenger && (
