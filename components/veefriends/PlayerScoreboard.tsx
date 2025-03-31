@@ -136,7 +136,7 @@ export const PlayerScoreboard: React.FC<PlayerScoreboardProps> = ({
       </View>
       
       <ThemedText type="default" style={styles.deckCount}>
-        Deck: {player.deck.length} cards
+        Deck: {player.deck?.length || player.deckCount || 0} cards
       </ThemedText>
     </View>
   );

@@ -307,14 +307,18 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
     name: activeGame.players[0]?.username || 'Player 1',
     points: activeGame.players[0]?.points || { skill: 0, stamina: 0, aura: 0 },
     terrificTokenUsed: activeGame.players[0]?.terrificTokenUsed || false,
-    deckCount: activeGame.players[0]?.deckCount || 0
+    deckCount: activeGame.players[0]?.deckCount || 0,
+    // Add deck property to fix PlayerScoreboard error
+    deck: [] // Empty array as a safe default
   };
 
   const player2 = {
     name: activeGame.players[1]?.username || 'Player 2',
     points: activeGame.players[1]?.points || { skill: 0, stamina: 0, aura: 0 },
     terrificTokenUsed: activeGame.players[1]?.terrificTokenUsed || false,
-    deckCount: activeGame.players[1]?.deckCount || 0
+    deckCount: activeGame.players[1]?.deckCount || 0,
+    // Add deck property to fix PlayerScoreboard error
+    deck: [] // Empty array as a safe default
   };
 
   return (

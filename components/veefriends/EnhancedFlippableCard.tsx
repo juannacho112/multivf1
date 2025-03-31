@@ -88,6 +88,15 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
   });
 
   const renderCardFront = () => {
+    if (!card) {
+      // Show empty card design for missing cards
+      return (
+        <View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint }]}>
+          <ThemedText type="subtitle" style={styles.emptyCardText}>Waiting...</ThemedText>
+        </View>
+      );
+    }
+    
     if (useEnhancedDesign) {
       return (
         <Animated.View style={[styles.cardSide, { opacity: cardFrontOpacity }]}>
@@ -96,14 +105,7 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
       );
     }
 
-    // Fallback to original card design if needed
-    if (!card) {
-      return (
-        <View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint, opacity: cardFrontOpacity }]}>
-          <ThemedText type="subtitle" style={styles.emptyCardText}>No Card</ThemedText>
-        </View>
-      );
-    }
+    // Fallback to original card design
 
     return (
       <Animated.View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint, opacity: cardFrontOpacity }]}>
