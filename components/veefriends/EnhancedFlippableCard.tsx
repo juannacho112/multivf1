@@ -88,34 +88,70 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
   });
 
   const renderCardFront = () => {
-    // Debug logging to help identify issues with card data
+    // Enhanced debug logging to help identify issues with card data
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[EnhancedFlippableCard] Rendering card:`, card ? 
-        `${card.name} (${card.id})` : 'null/undefined');
+      console.log(`[EnhancedFlippableCard] Rendering card:`, card ?
+        `${card.name || 'unnamed'} (${card.id || 'no-id'})` : 'null/undefined');
     }
     
+    // Handle null or undefined card
     if (!card) {
-      // Show empty card design for missing cards
+      // Show empty card design for missing cards with loading indicator
       return (
         <View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint }]}>
-          <ThemedText type="subtitle" style={styles.emptyCardText}>Waiting...</ThemedText>
+          <ThemedText type="subtitle" style={styles.emptyCardText}>Loading Card...</ThemedText>
+          <View style={styles.loadingIndicator}>
+            <Ionicons name="sync" size={24} color={colors.tint} />
+          </View>
         </View>
       );
     }
 
-    // Additional validation to handle malformed card data
-    const isValidCard = card && 
-      typeof card === 'object' && 
-      'name' in card && 
-      'skill' in card && 
-      'stamina' in card && 
-      'aura' in card;
+    // More comprehensive validation to handle malformed card data
+    const isValidCard = card &&
+      typeof card === 'object' &&
+      'name' in card &&
+      typeof card.name === 'string' &&
+      'skill' in card &&
+      !isNaN(Number(card.skill)) &&
+      'stamina' in card &&
+      !isNaN(Number(card.stamina)) &&
+      'aura' in card &&
+      !isNaN(Number(card.aura));
 
+    // Create a safe card object with fallback values for invalid data
+    const safeCard = {
+      id: card.id || `emergency-${Date.now()}`,
+      name: typeof card.name === 'string' ? card.name : 'Unknown Card',
+      skill: !isNaN(Number(card.skill)) ? Number(card.skill) : 10,
+      stamina: !isNaN(Number(card.stamina)) ? Number(card.stamina) : 10,
+      aura: !isNaN(Number(card.aura)) ? Number(card.aura) : 10,
+      baseTotal: !isNaN(Number(card.baseTotal)) ? Number(card.baseTotal) : 30,
+      finalTotal: !isNaN(Number(card.finalTotal)) ? Number(card.finalTotal) : 30,
+      rarity: typeof card.rarity === 'string' ? card.rarity : 'common',
+      character: typeof card.character === 'string' ? card.character : 'Unknown',
+      type: typeof card.type === 'string' ? card.type : 'standard',
+      specialAbility: card.specialAbility,
+      imageUrl: card.imageUrl
+    };
+
+    // If card is invalid but we can recover with fallbacks
     if (!isValidCard) {
-      console.error('[EnhancedFlippableCard] Invalid card data:', card);
+      console.warn('[EnhancedFlippableCard] Recovered from invalid card data:', card);
+      
+      // Show warning indicator on recovered cards
       return (
-        <View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint }]}>
-          <ThemedText type="subtitle" style={styles.emptyCardText}>Invalid Card</ThemedText>
+        <View style={styles.cardContainer}>
+          <View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: '#FFA500' }]}>
+            {useEnhancedDesign ? (
+              <CardDesign card={safeCard} />
+            ) : (
+              renderBasicCardContent(safeCard)
+            )}
+            <View style={styles.warningBadge}>
+              <Ionicons name="warning" size={16} color="#FFA500" />
+            </View>
+          </View>
         </View>
       );
     }
@@ -125,6 +161,62 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
         <Animated.View style={[styles.cardSide, { opacity: cardFrontOpacity }]}>
           <CardDesign card={card} />
         </Animated.View>
+      );
+    }
+    
+    return renderBasicCardContent(card);
+  };
+  
+  // Helper function to render the basic card content
+  const renderBasicCardContent = (card: any) => {
+    return (
+      <Animated.View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint, opacity: cardFrontOpacity }]}>
+        <View style={styles.cardHeader}>
+          <ThemedText type="subtitle" style={styles.cardName}>{card.name}</ThemedText>
+          <View style={[styles.cardRarity, { backgroundColor: getRarityColor(card.rarity) }]}>
+            <ThemedText style={styles.rarityText}>{card.rarity}</ThemedText>
+          </View>
+        </View>
+
+        {card.imageUrl && (
+          <View style={styles.cardImage} />
+        )}
+
+        <View style={styles.cardBody}>
+          <View style={styles.attributeRow}>
+            <View style={styles.attributeItem}>
+              <Ionicons name="flash" size={16} color={colors.text} />
+              <ThemedText style={styles.attributeName}>Skill</ThemedText>
+              <ThemedText style={styles.attributeValue}>{card.skill}</ThemedText>
+            </View>
+            
+            <View style={styles.attributeItem}>
+              <Ionicons name="fitness" size={16} color={colors.text} />
+              <ThemedText style={styles.attributeName}>Stamina</ThemedText>
+              <ThemedText style={styles.attributeValue}>{card.stamina}</ThemedText>
+            </View>
+            
+            <View style={styles.attributeItem}>
+              <Ionicons name="sparkles" size={16} color={colors.text} />
+              <ThemedText style={styles.attributeName}>Aura</ThemedText>
+              <ThemedText style={styles.attributeValue}>{card.aura}</ThemedText>
+            </View>
+          </View>
+          
+          {card.specialAbility && (
+            <View style={styles.specialAbility}>
+              <ThemedText style={styles.specialAbilityTitle}>Special Ability:</ThemedText>
+              <ThemedText style={styles.specialAbilityText}>{card.specialAbility}</ThemedText>
+            </View>
+          )}
+          
+          <View style={[styles.totalRow, { borderTopColor: colors.tint }]}>
+            <ThemedText style={styles.totalLabel}>Final Total:</ThemedText>
+            <ThemedText style={styles.totalValue}>{card.finalTotal}</ThemedText>
+          </View>
+        </View>
+      </Animated.View>
+    );
       );
     }
 

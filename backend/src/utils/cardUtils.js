@@ -116,34 +116,160 @@ const fullCardPool = [
  * @returns {Array} Array of card objects forming a deck
  */
 const generateRandomDeck = (cardPool, deckSize = 20, maxDuplicates = 2) => {
+  // Validate inputs
+  if (!cardPool || !Array.isArray(cardPool) || cardPool.length === 0) {
+    console.error('[Card Utils] Invalid card pool for random deck generation');
+    // Use fallback to full card pool if available, or create emergency cards
+    cardPool = fullCardPool.length > 0 ? fullCardPool : createEmergencyCardPool();
+  }
+  
+  // Ensure deckSize is valid
+  deckSize = Math.max(1, Math.min(deckSize || 20, 40)); // Between 1 and 40 cards
+  
+  // Ensure maxDuplicates is valid
+  maxDuplicates = Math.max(1, Math.min(maxDuplicates || 2, 4)); // Between 1 and 4 duplicates
+  
   const deck = [];
   const cardCounts = new Map(); // Track number of each card
   
-  while (deck.length < deckSize) {
+  // Safety counter to prevent infinite loops
+  let attempts = 0;
+  const maxAttempts = deckSize * 10;
+  
+  while (deck.length < deckSize && attempts < maxAttempts) {
+    attempts++;
+    
     // Get a random card
     const randomIndex = Math.floor(Math.random() * cardPool.length);
     const cardTemplate = cardPool[randomIndex];
     
+    if (!cardTemplate) {
+      console.warn('[Card Utils] Null card template encountered, skipping');
+      continue;
+    }
+    
     // Check if we've reached duplicate limit
-    const cardId = cardTemplate.character; // Use character for uniqueness
+    const cardId = cardTemplate.character || `unknown-${randomIndex}`; // Use character for uniqueness
     const currentCount = cardCounts.get(cardId) || 0;
     
     if (currentCount < maxDuplicates) {
-      // Create a new instance of the card
-      const card = { ...cardTemplate };
-      
-      // Generate a new ID for this instance
-      card.id = generateCardId();
-      
-      // Add to deck
-      deck.push(card);
-      
-      // Update card count
-      cardCounts.set(cardId, currentCount + 1);
+      try {
+        // Create a new instance of the card with proper validation
+        const card = {
+          ...cardTemplate,
+          id: generateCardId(),
+          // Ensure all required fields have valid values
+          name: String(cardTemplate.name || 'Mystery Card'),
+          skill: Number(isNaN(cardTemplate.skill) ? 10 : cardTemplate.skill),
+          stamina: Number(isNaN(cardTemplate.stamina) ? 10 : cardTemplate.stamina),
+          aura: Number(isNaN(cardTemplate.aura) ? 10 : cardTemplate.aura),
+          rarity: String(cardTemplate.rarity || 'common'),
+          character: String(cardTemplate.character || 'Unknown'),
+          type: String(cardTemplate.type || 'standard'),
+          unlocked: true
+        };
+        
+        // Calculate totals
+        card.baseTotal = card.skill + card.stamina + card.aura;
+        card.finalTotal = Math.floor(card.baseTotal * (rarityMultipliers[card.rarity] || 1));
+        
+        // Add to deck
+        deck.push(card);
+        
+        // Update card count
+        cardCounts.set(cardId, currentCount + 1);
+      } catch (error) {
+        console.error('[Card Utils] Error creating card:', error);
+      }
     }
   }
   
+  // If we couldn't generate enough cards, fill with emergency cards
+  if (deck.length < deckSize) {
+    console.warn(`[Card Utils] Could only generate ${deck.length}/${deckSize} cards, filling with emergency cards`);
+    const emergencyCards = createEmergencyCards(deckSize - deck.length);
+    deck.push(...emergencyCards);
+  }
+  
   return deck;
+};
+
+/**
+ * Create a pool of emergency cards when no other cards are available
+ * @returns {Array} Array of basic card objects
+ */
+const createEmergencyCardPool = () => {
+  console.log('[Card Utils] Creating emergency card pool');
+  const emergencyPool = [];
+  
+  // Create some basic cards with different attribute focuses
+  const characters = ['Lion', 'Tiger', 'Bear', 'Wolf', 'Eagle', 'Shark', 'Dolphin', 'Owl'];
+  const rarities = ['common', 'rare', 'very_rare', 'epic'];
+  
+  // Create skill-focused cards
+  for (let i = 0; i < 3; i++) {
+    const character = characters[i % characters.length];
+    const rarity = rarities[i % rarities.length];
+    emergencyPool.push(createVeefriendsCard(
+      `Skilled ${character}`,
+      20 + i * 3, // Higher skill
+      10 + i,
+      10 + i,
+      rarity,
+      character
+    ));
+  }
+  
+  // Create stamina-focused cards
+  for (let i = 0; i < 3; i++) {
+    const character = characters[(i + 3) % characters.length];
+    const rarity = rarities[i % rarities.length];
+    emergencyPool.push(createVeefriendsCard(
+      `Enduring ${character}`,
+      10 + i,
+      20 + i * 3, // Higher stamina
+      10 + i,
+      rarity,
+      character
+    ));
+  }
+  
+  // Create aura-focused cards
+  for (let i = 0; i < 3; i++) {
+    const character = characters[(i + 6) % characters.length];
+    const rarity = rarities[i % rarities.length];
+    emergencyPool.push(createVeefriendsCard(
+      `Mystical ${character}`,
+      10 + i,
+      10 + i,
+      20 + i * 3, // Higher aura
+      rarity,
+      character
+    ));
+  }
+  
+  return emergencyPool;
+};
+
+/**
+ * Create a specific number of emergency cards
+ * @param {number} count Number of cards to create
+ * @returns {Array} Array of emergency card objects
+ */
+const createEmergencyCards = (count) => {
+  const emergencyCards = [];
+  const pool = createEmergencyCardPool();
+  
+  for (let i = 0; i < count; i++) {
+    // Cycle through the emergency pool
+    const template = pool[i % pool.length];
+    const card = { ...template };
+    card.id = generateCardId();
+    card.name = `${card.name} #${i+1}`;
+    emergencyCards.push(card);
+  }
+  
+  return emergencyCards;
 };
 
 /**

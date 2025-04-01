@@ -22,24 +22,35 @@ export async function fixDeckStorage(db, gameId, playerIndex, deckData) {
   try {
     console.log(`[Emergency Fix] Storing deck for game ${gameId}, player ${playerIndex + 1}`);
     
-    // Simple validation
+    // Enhanced validation
     if (!db || !gameId || playerIndex === undefined || !deckData) {
       console.error('[Emergency Fix] Missing required parameters');
       return false;
     }
     
-    // Ensure deck is an array
+    // Ensure deck is an array with at least one card
     let deck = Array.isArray(deckData) ? deckData : [deckData];
+    if (deck.length === 0) {
+      console.error('[Emergency Fix] Empty deck data');
+      return false;
+    }
     
-    // Convert to plain objects with proper types
+    // Filter out any invalid cards
+    deck = deck.filter(card => card && typeof card === 'object');
+    if (deck.length === 0) {
+      console.error('[Emergency Fix] No valid cards in deck data');
+      return false;
+    }
+    
+    // Convert to plain objects with proper types and validation
     const plainDeck = deck.map(card => ({
       id: String(card.id || `card-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`),
       name: String(card.name || 'Fixed Card'),
-      skill: Number(card.skill || 10),
-      stamina: Number(card.stamina || 10), 
-      aura: Number(card.aura || 10),
-      baseTotal: Number(card.baseTotal || 30),
-      finalTotal: Number(card.finalTotal || 30),
+      skill: Number(isNaN(card.skill) ? 10 : card.skill),
+      stamina: Number(isNaN(card.stamina) ? 10 : card.stamina),
+      aura: Number(isNaN(card.aura) ? 10 : card.aura),
+      baseTotal: Number(isNaN(card.baseTotal) ? 30 : card.baseTotal),
+      finalTotal: Number(isNaN(card.finalTotal) ? 30 : card.finalTotal),
       rarity: String(card.rarity || 'common'),
       character: String(card.character || 'Fixed'),
       type: String(card.type || 'standard'),
@@ -50,7 +61,7 @@ export async function fixDeckStorage(db, gameId, playerIndex, deckData) {
     const updateField = `players.${playerIndex}.deck`;
     const updateObj = { $set: { [updateField]: plainDeck } };
     
-    // Try to convert string ID to ObjectId
+    // Try to convert string ID to ObjectId with better error handling
     let objectId;
     try {
       objectId = new ObjectId(gameId);
@@ -59,20 +70,43 @@ export async function fixDeckStorage(db, gameId, playerIndex, deckData) {
       return false;
     }
 
-    // Direct MongoDB update
-    const result = await db.collection('veefriendsGames').updateOne(
-      { _id: objectId },
-      updateObj
-    );
+    // Direct MongoDB update with retry logic
+    let success = false;
+    let attempts = 0;
+    const maxAttempts = 3;
     
-    console.log(`[Emergency Fix] Update result:`, result.matchedCount > 0 
-      ? `Success - ${plainDeck.length} cards stored` 
-      : 'Failed - no matching document found'
-    );
+    while (!success && attempts < maxAttempts) {
+      attempts++;
+      try {
+        const result = await db.collection('veefriendsGames').updateOne(
+          { _id: objectId },
+          updateObj
+        );
+        
+        success = result.matchedCount > 0;
+        
+        console.log(`[Emergency Fix] Update attempt ${attempts} result:`,
+          success ? `Success - ${plainDeck.length} cards stored` : 'Failed - no matching document found'
+        );
+        
+        if (success) break;
+        
+        // Short delay before retry
+        if (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 100 * attempts));
+        }
+      } catch (error) {
+        console.error(`[Emergency Fix] Error in attempt ${attempts}:`, error);
+        // Delay before retry
+        if (attempts < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, 200 * attempts));
+        }
+      }
+    }
     
-    return result.matchedCount > 0;
+    return success;
   } catch (error) {
-    console.error('[Emergency Fix] Error storing deck:', error);
+    console.error('[Emergency Fix] Critical error storing deck:', error);
     return false;
   }
 }

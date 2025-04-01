@@ -114,7 +114,7 @@ const PlayerSchema = new mongoose.Schema({
             return [];
           }
           
-          // Clean up newlines, tabs, and excess whitespace that cause MongoDB validation issues
+          // More robust cleaning of string data
           let cleanedString = cards
             .replace(/\n/g, '')
             .replace(/\t/g, '')
@@ -128,30 +128,58 @@ const PlayerSchema = new mongoose.Schema({
             return []; // Return empty array if we detect concatenation strings
           }
           
+          // Better validation before parsing
+          if (!cleanedString || cleanedString === '[]') {
+            console.log('[VeefriendsGame] Empty JSON array, returning empty array');
+            return [];
+          }
+          
           // Ensure the string looks like a JSON array
           if (!cleanedString.startsWith('[') || !cleanedString.endsWith(']')) {
             console.error("[VeefriendsGame] Invalid JSON array format in deck data");
             return [];
           }
           
-          // Parse the cleaned string
-          const parsedCards = JSON.parse(cleanedString);
+          // Try to parse with additional error handling
+          let parsedCards;
+          try {
+            parsedCards = JSON.parse(cleanedString);
+          } catch (parseError) {
+            console.error("[VeefriendsGame] JSON parse error:", parseError.message);
+            
+            // Try to fix common JSON issues
+            try {
+              // Replace single quotes with double quotes (common error)
+              const fixedString = cleanedString.replace(/'/g, '"');
+              parsedCards = JSON.parse(fixedString);
+              console.log("[VeefriendsGame] Successfully parsed after fixing quotes");
+            } catch (secondError) {
+              console.error("[VeefriendsGame] Failed to parse even after fixing quotes");
+              return [];
+            }
+          }
           
           // Validate that we got an array of cards with required fields
           if (!Array.isArray(parsedCards)) {
-            console.error("[VeefriendsGame] Parsed result is not an array");
+            console.error("[VeefriendsGame] Parsed result is not an array:", typeof parsedCards);
             return [];
           }
           
+          // Filter out any non-object items
+          const filteredCards = parsedCards.filter(card => card && typeof card === 'object');
+          if (filteredCards.length < parsedCards.length) {
+            console.warn(`[VeefriendsGame] Filtered out ${parsedCards.length - filteredCards.length} invalid cards`);
+          }
+          
           // Ensure each card has the required fields with correct types
-          const validatedCards = parsedCards.map(card => ({
+          const validatedCards = filteredCards.map(card => ({
             id: String(card.id || `card-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`),
             name: String(card.name || 'Card'),
-            skill: Number(card.skill || 0),
-            stamina: Number(card.stamina || 0),
-            aura: Number(card.aura || 0),
-            baseTotal: Number(card.baseTotal || 0),
-            finalTotal: Number(card.finalTotal || 0),
+            skill: Number(isNaN(card.skill) ? 0 : card.skill),
+            stamina: Number(isNaN(card.stamina) ? 0 : card.stamina),
+            aura: Number(isNaN(card.aura) ? 0 : card.aura),
+            baseTotal: Number(isNaN(card.baseTotal) ? 0 : card.baseTotal),
+            finalTotal: Number(isNaN(card.finalTotal) ? 0 : card.finalTotal),
             rarity: String(card.rarity || 'common'),
             character: String(card.character || 'Character'),
             type: String(card.type || 'standard'),
@@ -161,22 +189,29 @@ const PlayerSchema = new mongoose.Schema({
           console.log(`[VeefriendsGame] Successfully parsed ${validatedCards.length} cards from string`);
           return validatedCards;
         } catch (e) {
-          console.error("[VeefriendsGame] Error parsing cards string:", e);
+          console.error("[VeefriendsGame] Critical error parsing cards string:", e);
+          // Return empty array as last resort
           return [];
         }
       }
       
       // If already an array, validate the card format
       if (Array.isArray(cards)) {
+        // Filter out any non-object items
+        const filteredCards = cards.filter(card => card && typeof card === 'object');
+        if (filteredCards.length < cards.length) {
+          console.warn(`[VeefriendsGame] Filtered out ${cards.length - filteredCards.length} invalid cards from array`);
+        }
+        
         // Ensure each card has the required fields with correct types
-        const validatedCards = cards.map(card => ({
+        const validatedCards = filteredCards.map(card => ({
           id: String(card.id || `card-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`),
           name: String(card.name || 'Card'),
-          skill: Number(card.skill || 0),
-          stamina: Number(card.stamina || 0),
-          aura: Number(card.aura || 0),
-          baseTotal: Number(card.baseTotal || 0),
-          finalTotal: Number(card.finalTotal || 0),
+          skill: Number(isNaN(card.skill) ? 0 : card.skill),
+          stamina: Number(isNaN(card.stamina) ? 0 : card.stamina),
+          aura: Number(isNaN(card.aura) ? 0 : card.aura),
+          baseTotal: Number(isNaN(card.baseTotal) ? 0 : card.baseTotal),
+          finalTotal: Number(isNaN(card.finalTotal) ? 0 : card.finalTotal),
           rarity: String(card.rarity || 'common'),
           character: String(card.character || 'Character'),
           type: String(card.type || 'standard'),
