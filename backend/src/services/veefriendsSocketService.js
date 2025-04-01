@@ -937,7 +937,7 @@ const startGame = async (io, game) => {
     // Ensure the game is properly refreshed after all deck updates
     // This is critical to get the latest deck data
     console.log(`Reloading game ${gameId} to ensure latest deck data is available`);
-    game = await VeefriendsGame.findById(gameId);
+    game = await VeefriendsGame.findById(gameId).lean();
     
     if (!game) {
       throw new Error(`Game ${gameId} not found after deck setup`);
@@ -1009,7 +1009,7 @@ const startGame = async (io, game) => {
         
         try {
           const { generateRandomDeck, fullCardPool } = await import('../utils/cardUtils.js');
-          const emergencyDeck = generateRandomDeck(fullCardPool, 10); // Smaller deck for emergency
+          const emergencyDeck = generateRandomDeck(fullCardPool, 20); // Use full 20 cards for emergency deck
           
           // Apply to both players if needed
           if (player1DeckLength === 0) {

@@ -134,9 +134,22 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
     setLastCardsInPlay({ player1: null, player2: null });
   };
 
+  // Auto-draw cards when in draw phase
+  useEffect(() => {
+    if (activeGame?.phase === 'draw') {
+      // Add a small delay before auto-drawing cards
+      const timer = setTimeout(() => {
+        console.log('Auto-drawing cards...');
+        drawCards();
+      }, 1500); // 1.5 second delay
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeGame?.phase, drawCards]);
+
   // Handle when a round completes and we need to show results
   useEffect(() => {
-    if (activeGame.phase === 'draw' && lastCardsInPlay.player1 && lastCardsInPlay.player2) {
+    if (activeGame?.phase === 'draw' && lastCardsInPlay.player1 && lastCardsInPlay.player2) {
       // This means a round just completed (phase changed from resolve to draw)
       // and we have card data to show results for
       setTimeout(() => {
@@ -146,7 +159,7 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
         }
       }, 600);
     }
-  }, [activeGame.phase, lastCardsInPlay]);
+  }, [activeGame?.phase, lastCardsInPlay]);
 
   // Effect to track card reveals
   useEffect(() => {
@@ -471,32 +484,23 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
               onRespond={respondToChallenge}
             />
           )}
-
-          {/* Draw phase */}
-          {activeGame.phase === 'draw' && (
-            <View style={{
-              flexDirection: 'row',
-              justifyContent: 'center',
-              paddingVertical: 20,
-            }}>
-              <View style={{
-                backgroundColor: colors.primary,
-                paddingHorizontal: 20,
-                paddingVertical: 12,
-                borderRadius: 8,
-              }}>
-                <Text 
-                  style={{
-                    color: colors.white,
-                    fontSize: 16,
-                    fontWeight: 'bold',
-                  }}
-                  onPress={() => drawCards()}
-                >
-                  Draw Cards
-                </Text>
-              </View>
-            </View>
+{/* Draw phase - Auto-draw cards after a short delay */}
+{activeGame.phase === 'draw' && (
+  <View style={{
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingVertical: 20,
+  }}>
+    <ActivityIndicator size="small" color={colors.primary} />
+    <Text style={{
+      color: colors.text,
+      fontSize: 16,
+      marginLeft: 10
+    }}>
+      Drawing cards...
+    </Text>
+  </View>
+)}
           )}
           
           {/* Resolve phase */}
