@@ -122,10 +122,15 @@ const PlayerSchema = new mongoose.Schema({
             .replace(/\s+/g, ' ')
             .trim();
           
-          // Handle JS string concatenation pattern in the error
-          if (cleanedString.includes("' +") || cleanedString.includes("'+")) {
-            console.error("[VeefriendsGame] Detected string concatenation in deck data");
-            return []; // Return empty array if we detect concatenation strings
+          // Handle JS string concatenation patterns in the error
+          if (cleanedString.includes("' +") || cleanedString.includes("'+") || 
+              cleanedString.includes("[\n") || cleanedString.includes("\n]")) {
+            console.error("[VeefriendsGame] Detected string concatenation or newlines in deck data");
+            // Try to fix the string by removing all quotes and newlines
+            cleanedString = cleanedString.replace(/['"\n\r]/g, "").replace(/\s+/g, " ").trim();
+            // Add back the proper brackets and rebuild the string
+            if (!cleanedString.startsWith('[')) cleanedString = '[' + cleanedString;
+            if (!cleanedString.endsWith(']')) cleanedString = cleanedString + ']';
           }
           
           // Better validation before parsing

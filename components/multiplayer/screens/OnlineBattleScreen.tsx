@@ -342,8 +342,18 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
     deck: activeGame.players[1]?.deck || []
   };
 
-  // Ensure cardsInPlay has valid structure
-  const cardsInPlay = activeGame.cardsInPlay || { player1: null, player2: null };
+  // Ensure cardsInPlay has valid structure and parse from string if needed
+  let cardsInPlay = activeGame.cardsInPlay || { player1: null, player2: null };
+  
+  // Parse cardsInPlay if it's a string (common bug)
+  if (typeof cardsInPlay === 'string') {
+    try {
+      cardsInPlay = JSON.parse(cardsInPlay);
+    } catch (e) {
+      console.error('Failed to parse cardsInPlay:', e);
+      cardsInPlay = { player1: null, player2: null };
+    }
+  }
 
   // Add debugging to check button visibility
   console.log(`Game phase: ${activeGame.phase}`);
@@ -484,23 +494,22 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
               onRespond={respondToChallenge}
             />
           )}
-{/* Draw phase - Auto-draw cards after a short delay */}
-{activeGame.phase === 'draw' && (
-  <View style={{
-    flexDirection: 'row',
-    justifyContent: 'center',
-    paddingVertical: 20,
-  }}>
-    <ActivityIndicator size="small" color={colors.primary} />
-    <Text style={{
-      color: colors.text,
-      fontSize: 16,
-      marginLeft: 10
-    }}>
-      Drawing cards...
-    </Text>
-  </View>
-)}
+          {/* Draw phase - Auto-draw cards after a short delay */}
+          {activeGame.phase === 'draw' && (
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'center',
+              paddingVertical: 20,
+            }}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={{
+                color: colors.text,
+                fontSize: 16,
+                marginLeft: 10
+              }}>
+                Drawing cards...
+              </Text>
+            </View>
           )}
           
           {/* Resolve phase */}

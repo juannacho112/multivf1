@@ -1179,9 +1179,28 @@ const handlePlayerDisconnect = async (io, userId, gameId, isGuest, username) => 
 // Handle game end
 const handleGameEnd = async (io, game, winner) => {
   try {
-    game.status = 'completed';
-    game.phase = 'gameOver';
-    game.winner = winner;
+    // Safety check: is game a valid object?
+    if (!game || typeof game !== 'object') {
+      console.error('handleGameEnd: Invalid game object', game);
+      return;
+    }
+
+    // Use direct MongoDB update for critical game-ending state changes to avoid validation issues
+    try {
+      await VeefriendsGame.updateOne(
+        { _id: game._id },
+        { 
+          $set: {
+            status: 'completed',
+            phase: 'gameOver',
+            winner: winner
+          }
+        }
+      );
+      console.log(`Game ${game._id} marked as completed with winner: ${winner}`);
+    } catch (updateError) {
+      console.error(`Failed to update game ${game._id} status:`, updateError);
+    }
     
     // Update player stats for non-guest users
     for (let i = 0; i < game.players.length; i++) {
@@ -1214,14 +1233,42 @@ const handleGameEnd = async (io, game, winner) => {
       }
     }
     
-    await game.save();
+    // Get fresh game state to send to clients
+    let updatedGame;
+    try {
+      updatedGame = await VeefriendsGame.findById(game._id);
+    } catch (findError) {
+      console.error(`Failed to retrieve updated game ${game._id}:`, findError);
+      // Continue with the original game object if we can't get the updated one
+      updatedGame = game;
+    }
+    
+    // Prepare minimal game state if getGameState fails
+    let gameState;
+    try {
+      gameState = updatedGame.getGameState();
+    } catch (stateError) {
+      console.error(`Failed to get game state for ${game._id}:`, stateError);
+      // Provide basic game state as fallback
+      gameState = {
+        id: updatedGame._id,
+        status: 'completed',
+        phase: 'gameOver',
+        winner
+      };
+    }
     
     // Notify players
-    io.to(`game:${game._id}`).emit('game:ended', {
-      gameId: game._id,
-      winner,
-      gameState: game.getGameState()
-    });
+    try {
+      io.to(`game:${game._id}`).emit('game:ended', {
+        gameId: game._id,
+        winner,
+        gameState
+      });
+      console.log(`Game ${game._id} end notification sent to players`);
+    } catch (emitError) {
+      console.error(`Failed to emit game:ended event for ${game._id}:`, emitError);
+    }
     
     console.log(`Game ${game._id} ended. Winner: ${winner}`);
   } catch (error) {
