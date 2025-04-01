@@ -90,7 +90,7 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
   const renderCardFront = () => {
     // Enhanced debug logging to help identify issues with card data
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[EnhancedFlippableCard] Rendering card:`, card ?
+      console.log(`[EnhancedFlippableCard] Rendering card:`, card ? 
         `${card.name || 'unnamed'} (${card.id || 'no-id'})` : 'null/undefined');
     }
     
@@ -100,7 +100,7 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
       return (
         <View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint }]}>
           <ThemedText type="subtitle" style={styles.emptyCardText}>Loading Card...</ThemedText>
-          <View style={styles.loadingIndicator}>
+          <View style={additionalStyles.loadingIndicator}>
             <Ionicons name="sync" size={24} color={colors.tint} />
           </View>
         </View>
@@ -108,15 +108,15 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
     }
 
     // More comprehensive validation to handle malformed card data
-    const isValidCard = card &&
-      typeof card === 'object' &&
-      'name' in card &&
+    const isValidCard = card && 
+      typeof card === 'object' && 
+      'name' in card && 
       typeof card.name === 'string' &&
-      'skill' in card &&
+      'skill' in card && 
       !isNaN(Number(card.skill)) &&
-      'stamina' in card &&
+      'stamina' in card && 
       !isNaN(Number(card.stamina)) &&
-      'aura' in card &&
+      'aura' in card && 
       !isNaN(Number(card.aura));
 
     // Create a safe card object with fallback values for invalid data
@@ -148,7 +148,7 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
             ) : (
               renderBasicCardContent(safeCard)
             )}
-            <View style={styles.warningBadge}>
+            <View style={additionalStyles.warningBadge}>
               <Ionicons name="warning" size={16} color="#FFA500" />
             </View>
           </View>
@@ -167,61 +167,24 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
     return renderBasicCardContent(card);
   };
   
+  // Add styles for loading indicator and warning badge
+  const additionalStyles = StyleSheet.create({
+    loadingIndicator: {
+      alignItems: 'center',
+      marginTop: 10,
+    },
+    warningBadge: {
+      position: 'absolute',
+      top: 10,
+      right: 10,
+      backgroundColor: 'rgba(255, 165, 0, 0.2)',
+      borderRadius: 12,
+      padding: 4,
+    }
+  });
+
   // Helper function to render the basic card content
   const renderBasicCardContent = (card: any) => {
-    return (
-      <Animated.View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint, opacity: cardFrontOpacity }]}>
-        <View style={styles.cardHeader}>
-          <ThemedText type="subtitle" style={styles.cardName}>{card.name}</ThemedText>
-          <View style={[styles.cardRarity, { backgroundColor: getRarityColor(card.rarity) }]}>
-            <ThemedText style={styles.rarityText}>{card.rarity}</ThemedText>
-          </View>
-        </View>
-
-        {card.imageUrl && (
-          <View style={styles.cardImage} />
-        )}
-
-        <View style={styles.cardBody}>
-          <View style={styles.attributeRow}>
-            <View style={styles.attributeItem}>
-              <Ionicons name="flash" size={16} color={colors.text} />
-              <ThemedText style={styles.attributeName}>Skill</ThemedText>
-              <ThemedText style={styles.attributeValue}>{card.skill}</ThemedText>
-            </View>
-            
-            <View style={styles.attributeItem}>
-              <Ionicons name="fitness" size={16} color={colors.text} />
-              <ThemedText style={styles.attributeName}>Stamina</ThemedText>
-              <ThemedText style={styles.attributeValue}>{card.stamina}</ThemedText>
-            </View>
-            
-            <View style={styles.attributeItem}>
-              <Ionicons name="sparkles" size={16} color={colors.text} />
-              <ThemedText style={styles.attributeName}>Aura</ThemedText>
-              <ThemedText style={styles.attributeValue}>{card.aura}</ThemedText>
-            </View>
-          </View>
-          
-          {card.specialAbility && (
-            <View style={styles.specialAbility}>
-              <ThemedText style={styles.specialAbilityTitle}>Special Ability:</ThemedText>
-              <ThemedText style={styles.specialAbilityText}>{card.specialAbility}</ThemedText>
-            </View>
-          )}
-          
-          <View style={[styles.totalRow, { borderTopColor: colors.tint }]}>
-            <ThemedText style={styles.totalLabel}>Final Total:</ThemedText>
-            <ThemedText style={styles.totalValue}>{card.finalTotal}</ThemedText>
-          </View>
-        </View>
-      </Animated.View>
-    );
-      );
-    }
-
-    // Fallback to original card design
-
     return (
       <Animated.View style={[styles.cardSide, styles.cardFront, { backgroundColor: colors.background, borderColor: colors.tint, opacity: cardFrontOpacity }]}>
         <View style={styles.cardHeader}>
