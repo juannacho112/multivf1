@@ -345,15 +345,34 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
   // Ensure cardsInPlay has valid structure and parse from string if needed
   let cardsInPlay = activeGame.cardsInPlay || { player1: null, player2: null };
   
-  // Parse cardsInPlay if it's a string (common bug)
-  if (typeof cardsInPlay === 'string') {
-    try {
+  // Process cardsInPlay no matter what format it comes in
+  try {
+    // Handle when it's a string
+    if (typeof cardsInPlay === 'string') {
       cardsInPlay = JSON.parse(cardsInPlay);
-    } catch (e) {
-      console.error('Failed to parse cardsInPlay:', e);
+    }
+    
+    // Make sure it has the expected structure
+    if (!cardsInPlay || typeof cardsInPlay !== 'object') {
       cardsInPlay = { player1: null, player2: null };
     }
+    
+    // If cardsInPlay doesn't have player1 or player2 properties, add them
+    if (!('player1' in cardsInPlay)) {
+      cardsInPlay.player1 = null;
+    }
+    
+    if (!('player2' in cardsInPlay)) {
+      cardsInPlay.player2 = null;
+    }
+  } catch (e) {
+    console.error('Failed to process cardsInPlay:', e);
+    cardsInPlay = { player1: null, player2: null };
   }
+  
+  // Make sure we don't pass undefined to EnhancedFlippableCard
+  const player1Card = cardsInPlay.player1 || null;
+  const player2Card = cardsInPlay.player2 || null;
 
   // Add debugging to check button visibility
   console.log(`Game phase: ${activeGame.phase}`);
@@ -443,7 +462,7 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
           {/* Opponent Card - Only visible when being resolved */}
           <View style={[styles.cardArea, isSmallScreen && styles.smallCardArea]}>
             <EnhancedFlippableCard
-              card={isPlayer1 ? activeGame.cardsInPlay.player2 : activeGame.cardsInPlay.player1}
+              card={isPlayer1 ? player2Card : player1Card}
               faceDown={activeGame.phase !== 'resolve'}
               flipToFront={activeGame.phase === 'resolve'}
               manualFlip={false}
@@ -462,7 +481,7 @@ export const OnlineBattleScreen: React.FC<OnlineBattleScreenProps> = ({ onBack }
           {/* Player Card - Always visible */}
           <View style={[styles.cardArea, isSmallScreen && styles.smallCardArea]}>
             <EnhancedFlippableCard
-              card={isPlayer1 ? activeGame.cardsInPlay.player1 : activeGame.cardsInPlay.player2}
+              card={isPlayer1 ? player1Card : player2Card}
               faceDown={false}
               manualFlip={false}
               useEnhancedDesign={true}

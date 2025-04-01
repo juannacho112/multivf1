@@ -121,18 +121,18 @@ export const EnhancedFlippableCard: React.FC<FlippableCardProps> = ({
 
     // Create a safe card object with fallback values for invalid data
     const safeCard = {
-      id: card.id || `emergency-${Date.now()}`,
-      name: typeof card.name === 'string' ? card.name : 'Unknown Card',
-      skill: !isNaN(Number(card.skill)) ? Number(card.skill) : 10,
-      stamina: !isNaN(Number(card.stamina)) ? Number(card.stamina) : 10,
-      aura: !isNaN(Number(card.aura)) ? Number(card.aura) : 10,
-      baseTotal: !isNaN(Number(card.baseTotal)) ? Number(card.baseTotal) : 30,
-      finalTotal: !isNaN(Number(card.finalTotal)) ? Number(card.finalTotal) : 30,
-      rarity: typeof card.rarity === 'string' ? card.rarity : 'common',
-      character: typeof card.character === 'string' ? card.character : 'Unknown',
-      type: typeof card.type === 'string' ? card.type : 'standard',
-      specialAbility: card.specialAbility,
-      imageUrl: card.imageUrl
+      id: card?.id || `emergency-${Date.now()}`,
+      name: typeof card?.name === 'string' ? card.name : 'Unknown Card',
+      skill: !isNaN(Number(card?.skill)) ? Number(card.skill) : 10,
+      stamina: !isNaN(Number(card?.stamina)) ? Number(card.stamina) : 10,
+      aura: !isNaN(Number(card?.aura)) ? Number(card.aura) : 10,
+      baseTotal: !isNaN(Number(card?.baseTotal)) ? Number(card.baseTotal) : 30,
+      finalTotal: !isNaN(Number(card?.finalTotal)) ? Number(card.finalTotal) : 30,
+      rarity: typeof card?.rarity === 'string' ? card.rarity : 'common',
+      character: typeof card?.character === 'string' ? card.character : 'Unknown',
+      type: typeof card?.type === 'string' ? card.type : 'standard',
+      specialAbility: card?.specialAbility || null,
+      imageUrl: card?.imageUrl || null
     };
 
     // If card is invalid but we can recover with fallbacks
